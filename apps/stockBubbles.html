@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Bubbles - Alpaca Edition</title>
+    <title>Alpha Bubbles</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -79,7 +79,7 @@ function getBubbleScale() {
 
 function getBaseBubbleRadius(change) {
     const scale = getBubbleScale();
-    return (45 + Math.abs(change) * 5) * scale;
+    return (40 + Math.abs(change) * 8) * scale;
 }
 
 async function fetchTopSP500Symbols() {
@@ -262,7 +262,6 @@ function createBubble(symbol, change, meta = {}) {
 // global afterRender to draw bubbles with gradient, hover outline, and labels
 Events.on(render, 'afterRender', () => {
     const context = render.context;
-    context.font = "bold 16px Arial";
     context.fillStyle = "white";
     context.textAlign = "center";
     context.textBaseline = 'middle';
@@ -294,10 +293,11 @@ Events.on(render, 'afterRender', () => {
     // Draw hover outline and labels
     for (const body of bodies) {
         if (!body.circleRadius) continue;
+        const radius = body.circleRadius;
 
         if (hoveredBubble === body) {
             context.beginPath();
-            context.arc(body.position.x, body.position.y, body.circleRadius + 0.5, 0, 2 * Math.PI);
+            context.arc(body.position.x, body.position.y, radius + 0.5, 0, 2 * Math.PI);
             context.strokeStyle = 'rgba(255,255,255,0.85)';
             context.lineWidth = 1.6;
             context.stroke();
@@ -307,11 +307,17 @@ Events.on(render, 'afterRender', () => {
         const meta = body._meta || {};
         const ticker = body.ticker || (meta.name || '');
         const changeText = meta.change !== undefined ? `${meta.change}%` : '';
+
+        // Dynamically calculate font sizes based on bubble radius
+        const tickerFontSize = Math.max(10, Math.round(radius * 0.32));
+        const changeFontSize = Math.max(8, Math.round(radius * 0.22));
+
         context.fillStyle = "white";
-        context.fillText(ticker, body.position.x, body.position.y - 6);
-        context.font = "12px Arial";
-        context.fillText(changeText, body.position.x, body.position.y + 12);
-        context.font = "bold 16px Arial";
+        context.font = `bold ${tickerFontSize}px Arial`;
+        context.fillText(ticker, body.position.x, body.position.y - (changeFontSize / 3));
+        
+        context.font = `${changeFontSize}px Arial`;
+        context.fillText(changeText, body.position.x, body.position.y + (tickerFontSize / 1.5));
     }
 });
 
@@ -471,15 +477,10 @@ Events.on(engine, 'beforeUpdate', () => {
     // Safety check for active drags: force release if mouse or bubble hits bounds
     if (mouseConstraint.body) {
         const m = mouseConstraint.mouse.position;
-        const body = mouseConstraint.body;
-        const r = body.circleRadius || 0;
-        const px = body.position.x;
-        const py = body.position.y;
 
         const mouseOutside = m.x < 2 || m.x > width - 2 || m.y < 2 || m.y > height - 2;
-        const touchingBoundary = px - r <= 1 || px + r >= width - 1 || py - r <= 1 || py + r >= height - 1;
 
-        if (mouseOutside || touchingBoundary) {
+        if (mouseOutside) {
             releaseDrag();
         }
     }
