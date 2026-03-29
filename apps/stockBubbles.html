@@ -7,44 +7,75 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000000; font-family: 'Montserrat', sans-serif; font-weight: 400; overflow: hidden; height: 100vh; }
+                * { margin: 0; padding: 0; box-sizing: border-box; font-family: Verdana, Geneva, sans-serif; }
+        body { background: #000000; font-weight: 400; overflow: hidden; height: 100vh; }
         strong { font-weight: 400; }
         
         /* Header container */
         #header { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
-        #controls { height: 64px; display: flex; align-items: center; justify-content: space-between; color: white; background: rgba(0,0,0,0.45); padding: 10px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+                #controls { height: 64px; display: flex; align-items: center; justify-content: space-between; color: white; background: rgba(0,0,0,0.45); padding: 10px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.6); gap: 10px; }
         
-        /* Progress bar container */
-        #progress-container { position: fixed; top: 64px; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.06); z-index: 25; }
-        #progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg,#00d97e,#00a86b); transition: width 0.18s linear; }
+                /* Progress bar container */
+                #progress-container { position: fixed; top: 64px; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.06); z-index: 25; }
+                #progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg,#00d97e,#00a86b); transition: width 0.18s linear; }
         
-        /* Bubbles container */
-        #bubbles-container { position: fixed; top: 68px; left: 0; right: 0; bottom: 0; z-index: 10; }
-        canvas { display: block; width: 100%; height: 100%; }
+                /* Bubbles container */
+                #bubbles-container { position: fixed; top: 68px; left: 0; right: 0; bottom: 0; z-index: 10; }
+                canvas { display: block; width: 100%; height: 100%; }
 
-        /* Responsive design for mobile */
-        @media (max-width: 768px) {
-            #controls { height: 48px; padding: 8px 16px; }
-            #controls strong { font-size: 18px; }
-            #controls span { font-size: 12px; }
-            #progress-container { top: 48px; }
-            #bubbles-container { top: 52px; }
-        }
+                /* Responsive design for mobile */
+                @media (max-width: 768px) {
+                    #controls { height: 48px; padding: 8px 16px; }
+                    #controls strong { font-size: 18px; }
+                    #controls span { font-size: 12px; }
+                    #progress-container { top: 48px; }
+                    #bubbles-container { top: 52px; }
+                }
+
+                .timeframe-list {
+                    display: flex;
+                    gap: 8px;
+                    background: rgba(255,255,255,0.1);
+                    padding: 4px;
+                    border-radius: 6px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+                .timeframe-btn {
+                    background: none;
+                    border: none;
+                    color: rgba(255,255,255,0.6);
+                    padding: 4px 8px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                    font-family: inherit;
+                }
+                .timeframe-btn:hover { color: white; background: rgba(255,255,255,0.1); }
+                .timeframe-btn.active { color: white; background: rgba(255,255,255,0.2); font-weight: bold; }
     </style>
 </head>
 <body>
 
     <!-- Header Container -->
     <div id="header">
-        <div id="controls">
-            <div style="display:flex; align-items:center; gap:12px">
-                <strong style="font-size:20px">Alpha Bubbles</strong>
-                <span id="status" style="font-size:13px; color:#ddd">Loading market data...</span>
-            </div>
-        </div>
-        <!-- Progress Bar Container -->
-        <div id="progress-container"><div id="progress-bar"></div></div>
+                <div id="controls">
+                    <div style="display:flex; align-items:center; gap:16px">
+                        <strong style="font-size:20px">Alpha Bubbles</strong>
+                        <div class="timeframe-list">
+                            <button class="timeframe-btn" data-value="1H">1H</button>
+                            <button class="timeframe-btn active" data-value="1D">1D</button>
+                            <button class="timeframe-btn" data-value="1W">1W</button>
+                            <button class="timeframe-btn" data-value="1M">1M</button>
+                            <button class="timeframe-btn" data-value="3M">3M</button>
+                            <button class="timeframe-btn" data-value="1Y">1Y</button>
+                            <button class="timeframe-btn" data-value="YTD">YTD</button>
+                </div>
+                        <span id="status" style="font-size:13px; color:#ddd">Loading market data...</span>
+                    </div>
+                </div>
+                <!-- Progress Bar Container -->
+                <div id="progress-container"><div id="progress-bar"></div></div>
     </div>
 
     <!-- Bubbles Container -->
@@ -55,6 +86,8 @@
 const API_KEY = 'PKMGEVTEOG26N7FTKGP34IYNZU';
 const SECRET_KEY = 'UHpp39woj29vzm6paLknWEmf6RKZPMy7EhYkxx6oxAz';
 const SPY_CONSTITUENTS_URL = 'https://data.alpaca.markets/v2/stocks/constituents?symbol=SPY';
+let selectedTimeframe = '1D';
+let anchorPrices = {};
 let symbolList = [];
 
 const TOP_SP500_FALLBACK = [
@@ -81,7 +114,11 @@ function getBubbleScale() {
 
 function getBaseBubbleRadius(change) {
     const scale = getBubbleScale();
-    return (40 + Math.abs(change) * 8) * scale;
+    // For longer timeframes, percentage changes are larger. 
+    // We adjust the multiplier to keep bubble sizes reasonable.
+    const multiplier = (selectedTimeframe === '1D' || selectedTimeframe === '1H') ? 8 : 1.5;
+    const radiusBoost = Math.min(Math.abs(change) * multiplier, 100);
+    return (40 + radiusBoost) * scale;
 }
 
 async function fetchTopSP500Symbols() {
@@ -152,11 +189,87 @@ window.addEventListener('mouseleave', releaseDrag);
 window.addEventListener('blur', releaseDrag);
 document.getElementById('bubbles-container').addEventListener('mouseleave', releaseDrag);
 
+document.querySelectorAll('.timeframe-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const val = e.target.getAttribute('data-value');
+        if (val === selectedTimeframe) return;
+
+        // UI update
+        document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+
+        selectedTimeframe = val;
+        
+        // Clear existing bubbles
+        const bodies = Composite.allBodies(world).filter(b => b.circleRadius);
+        Composite.remove(world, bodies);
+        
+        // Reset baseline and reload
+        anchorPrices = {};
+        await updateAnchorPrices();
+        await fetchAndCreateBubbles();
+    });
+});
+
+async function updateAnchorPrices() {
+    if (selectedTimeframe === '1D') {
+        anchorPrices = {};
+        return;
+    }
+    
+    document.getElementById('status').innerText = `Updating ${selectedTimeframe} baseline...`;
+    
+    let start, end;
+    let timeframe = '1Day';
+    const now = new Date();
+    
+    if (selectedTimeframe === '1H') {
+        start = new Date(now.getTime() - 60 * 60 * 1000);
+        end = new Date(start.getTime() + 15 * 60 * 1000); // 15 min window
+        timeframe = '1Min';
+    } else if (selectedTimeframe === '1W') {
+        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        end = new Date(start.getTime() + 4 * 24 * 60 * 60 * 1000); // 4 day window
+    } else if (selectedTimeframe === '1M') {
+        start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    } else if (selectedTimeframe === '3M') {
+        start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    } else if (selectedTimeframe === '1Y') {
+        start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    } else if (selectedTimeframe === 'YTD') {
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }
+    
+    try {
+        const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbolList.join(',')}&timeframe=${timeframe}&start=${start.toISOString()}${end ? `&end=${end.toISOString()}` : ''}&limit=1000&adjustment=split`;
+        const response = await fetch(url, {
+            headers: { 'APCA-API-KEY-ID': API_KEY, 'APCA-API-SECRET-KEY': SECRET_KEY }
+        });
+        const data = await response.json();
+        
+        if (data.bars) {
+            Object.keys(data.bars).forEach(symbol => {
+                const symbolBars = data.bars[symbol];
+                if (symbolBars && symbolBars.length > 0) {
+                    anchorPrices[symbol] = symbolBars[0].c; 
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Error fetching anchor prices:", e);
+    }
+}
+
 // --- DATA FETCHING & BUBBLE CREATION ---
 async function fetchAndCreateBubbles() {
     try {
         if (!symbolList.length) {
             symbolList = await fetchTopSP500Symbols();
+            if (selectedTimeframe !== '1D') await updateAnchorPrices();
         }
 
         const snapshotUrl = `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbolList.join(',')}`;
@@ -173,15 +286,22 @@ async function fetchAndCreateBubbles() {
             const stock = data[symbol];
             const price = stock.latestTrade && stock.latestTrade.p ? stock.latestTrade.p : null;
             const prevClose = stock.prevDailyBar && stock.prevDailyBar.c ? stock.prevDailyBar.c : null;
-            const change = (price && prevClose) ? ((price - prevClose) / prevClose * 100) : 0;
+            
+            let referencePrice = prevClose;
+            if (selectedTimeframe !== '1D' && anchorPrices[symbol]) {
+                referencePrice = anchorPrices[symbol];
+            }
 
-            const existing = bodies.find(b => b.ticker === symbol);
+            const change = (price && referencePrice) ? ((price - referencePrice) / referencePrice * 100) : 0;
+
+                        const existing = bodies.find(b => b.ticker === symbol);
             if (existing) {
                 existing._meta = existing._meta || {};
-                existing._meta.prevClose = prevClose;
+                existing._meta.referencePrice = referencePrice;
                 existing._meta.price = price ? Number(price).toFixed(2) : existing._meta.price;
                 existing._meta.change = change.toFixed(2);
                 if (existing.render) existing.render.fillStyle = 'transparent'; // Will draw gradient
+
 
                 // resize bubble smoothly if magnitude changed significantly
                 const newRadius = getBaseBubbleRadius(change);
@@ -192,10 +312,11 @@ async function fetchAndCreateBubbles() {
                     // update circleRadius if present
                     if (existing.circleRadius) existing.circleRadius = newRadius;
                 }
-            } else {
-                createBubble(symbol, change, { price, prevClose, name: stock.ticker });
+                        } else {
+                createBubble(symbol, change, { price, referencePrice, name: stock.ticker });
             }
         });
+
 
         // start websocket to receive live quotes and update bubbles (only once)
         if (!isAlpacaWSStarted) {
@@ -252,11 +373,11 @@ function createBubble(symbol, change, meta = {}) {
 
     Composite.add(world, bubble);
     // attach metadata to the body for dynamic rendering
-    bubble.ticker = symbol;
+        bubble.ticker = symbol;
     bubble._meta = {
         change: (change || 0).toFixed ? (change).toFixed(2) : String(change),
         price: meta.price ? meta.price.toFixed(2) : null,
-        prevClose: meta.prevClose || null,
+        referencePrice: meta.referencePrice || null,
         name: meta.name || symbol
     };
 }
@@ -313,7 +434,7 @@ Events.on(render, 'afterRender', () => {
         // Dynamically calculate font sizes based on bubble radius
         const tickerFontSize = Math.max(10, Math.round(radius * 0.32));
         const changeFontSize = Math.max(8, Math.round(radius * 0.22));
-        const fontStack = "'Montserrat', sans-serif";
+        const fontStack = "Verdana, Geneva, sans-serif";
 
         context.fillStyle = "white";
         context.font = `400 ${tickerFontSize}px ${fontStack}`;
@@ -366,15 +487,15 @@ function startAlpacaWebsocket(symbols) {
 
                 if (!price) return;
 
-                // update body metadata
+                                // update body metadata
                 const bodies = Composite.allBodies(world);
                 for (const b of bodies) {
                     if (b.ticker === sym) {
                         b._meta = b._meta || {};
-                        const prevClose = b._meta.prevClose;
+                        const refPrice = b._meta.referencePrice;
                         b._meta.price = Number(price).toFixed(2);
-                        if (prevClose) {
-                            const change = ((price - prevClose) / prevClose) * 100;
+                        if (refPrice) {
+                            const change = ((price - refPrice) / refPrice) * 100;
                             b._meta.change = change.toFixed(2);
                         }
                         // update color render
@@ -382,6 +503,7 @@ function startAlpacaWebsocket(symbols) {
                         break;
                     }
                 }
+
             } catch (e) { console.error('WS parse error', e); }
         };
         alpacaWS.onerror = (e) => console.error('Alpaca WS error', e);
