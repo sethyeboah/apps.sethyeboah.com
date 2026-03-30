@@ -53,6 +53,20 @@
                 }
                 .timeframe-btn:hover { color: white; background: rgba(255,255,255,0.1); }
                 .timeframe-btn.active { color: white; background: rgba(255,255,255,0.2); font-weight: bold; }
+
+        /* Modal Styles */
+        #list-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; overflow-y: auto; padding: 20px; }
+        .modal-content { background: #111; padding: 24px; border-radius: 12px; max-width: 1000px; margin: 40px auto; position: relative; border: 1px solid #333; color: white; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .close-btn { position: absolute; top: 15px; right: 20px; color: #888; font-size: 28px; cursor: pointer; transition: 0.2s; }
+        .close-btn:hover { color: white; }
+        #popup-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+        #popup-table th { text-align: left; padding: 12px 8px; border-bottom: 2px solid #333; color: #aaa; font-weight: 400; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+        #popup-table td { padding: 12px 8px; border-bottom: 1px solid #222; }
+        #popup-table tr:hover { background: rgba(255,255,255,0.03); }
+        .text-right { text-align: right; }
+        .pct-neg { color: #ff3b3b; }
+        .pct-pos { color: #00d97e; }
+        #list-btn { border: 1px solid rgba(255,255,255,0.2); margin-left: 8px; }
     </style>
 </head>
 <body>
@@ -70,7 +84,9 @@
                             <button class="timeframe-btn" data-value="3M">3M</button>
                             <button class="timeframe-btn" data-value="1Y">1Y</button>
                             <button class="timeframe-btn" data-value="YTD">YTD</button>
+                            <button class="timeframe-btn" data-value="ATH">ATH</button>
                 </div>
+                        <button class="timeframe-btn" id="list-btn">List</button>
                         <span id="status" style="font-size:13px; color:#ddd">Loading market data...</span>
                     </div>
                 </div>
@@ -80,6 +96,27 @@
 
     <!-- Bubbles Container -->
     <div id="bubbles-container"></div>
+
+    <!-- List Modal -->
+    <div id="list-modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2 style="font-weight: 400; margin-bottom: 8px;">Market Overview</h2>
+            <p style="color: #888; font-size: 13px; margin-bottom: 16px;">Comparing current prices to 7-year historical highs.</p>
+            <table id="popup-table">
+                <thead>
+                    <tr>
+                        <th>Company Name</th>
+                        <th>Ticker</th>
+                        <th class="text-right">Current Price</th>
+                        <th class="text-right">7Y High</th>
+                        <th class="text-right">% Change (Drawdown)</th>
+                    </tr>
+                </thead>
+                <tbody id="list-tbody"></tbody>
+            </table>
+        </div>
+    </div>
 
 <script>
 // --- CONFIGURATION ---
@@ -92,7 +129,7 @@ let symbolList = [];
 
 const TOP_SP500_FALLBACK = [
     'AAPL','MSFT','AMZN','GOOGL','NVDA','META','TSLA','BRK.B','UNH','JNJ',
-    'V','JPM','PG','MA','AVGO','NVDA','HD','KO','PEP','MRK','VZ','CMCSA','ADBE','NFLX','NKE','INTC','T','ABT','XOM','CVX','CSCO','PFE','ORCL','TMO','WMT','PEP','LLY','CRM','ACN','COST','MCD','DHR','WFC','QCOM','MDT','NEE','HON','AMGN','ABBV','BMY','TXN','UPS','INTU','RTX','LOW','UNP','PM','MS','IBM','BIDU','SBUX','CAT','GE','AXP','MMM','GILD','AMD','LMT','BA','GS','AMT','BLK','CVS','SNY','CHTR','ADP','ISRG','PM','SYK','MO','SPGI','CCI','PLD','CB','PYPL','ANTM','TGT','ADSK','DE','ZTS','MDLZ','SCHW','CI','BDX','LRCX','REGN','DUK','ETN','SYF'
+    'V','JPM','PG','MA','AVGO','NVDA','HD','KO','PEP','MRK','VZ','CMCSA','ADBE','NFLX','NKE','INTC','T','ABT','XOM','CVX','CSCO','PFE','ORCL','TMO','WMT','PEP','LLY','CRM','ACN','COST','MCD','DHR','WFC','QCOM','MDT','NEE','HON','AMGN','ABBV','BMY','TXN','UPS','INTU','RTX','LOW','UNP','PM','MS','IBM','BIDU','SBUX','CAT','GE','AXP','MMM','GILD','AMD','LMT','BA','GS','AMT','BLK','CVS','SNY','CHTR','ADP','ISRG','PM','SYK','MO','SPGI','CCI','PLD','CB','PYPL','ANTM','TGT','ADSK','DE','ZTS','MDLZ','SCHW','CI','BDX','LRCX','REGN','DUK','ETN','SYF','TJX','D','SO','FIS','FISV'
 ];
 
 // --- PHYSICS ENGINE SETUP ---
@@ -139,11 +176,11 @@ async function fetchTopSP500Symbols() {
 
         if (!symbols.length) throw new Error('No symbols in constituents response');
 
-        // Keep top 100 from response order (usually by index weight)
-        return symbols.slice(0, 100);
+        // Deduplicate and keep top 100 from response order
+        return [...new Set(symbols)].slice(0, 100);
     } catch (error) {
         console.warn('Could not fetch SP500 constituents from Alpaca, using fallback list', error);
-        return TOP_SP500_FALLBACK.slice(0, 100);
+        return [...new Set(TOP_SP500_FALLBACK)].slice(0, 100);
     }
 }
 
@@ -188,6 +225,69 @@ window.addEventListener('mouseup', releaseDrag);
 window.addEventListener('mouseleave', releaseDrag);
 window.addEventListener('blur', releaseDrag);
 document.getElementById('bubbles-container').addEventListener('mouseleave', releaseDrag);
+
+// --- MODAL LOGIC ---
+const modal = document.getElementById('list-modal');
+const listBtn = document.getElementById('list-btn');
+const closeBtn = document.querySelector('.close-btn');
+
+closeBtn.onclick = () => modal.style.display = "none";
+window.onclick = (event) => { if (event.target == modal) modal.style.display = "none"; };
+
+listBtn.onclick = async () => {
+    modal.style.display = "block";
+    const tbody = document.getElementById('list-tbody');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color: #888;">Fetching 7-year historical data...</td></tr>';
+
+    try {
+        const now = new Date();
+        const start = new Date();
+        start.setFullYear(now.getFullYear() - 7);
+
+        // Fetch 7-year highs
+        const barsUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbolList.join(',')}&timeframe=1Month&start=${start.toISOString()}&adjustment=split`;
+        const barsRes = await fetch(barsUrl, { headers: { 'APCA-API-KEY-ID': API_KEY, 'APCA-API-SECRET-KEY': SECRET_KEY } });
+        const barsData = await barsRes.json();
+
+        // Fetch latest prices for fresh data
+        const snapUrl = `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbolList.join(',')}`;
+        const snapRes = await fetch(snapUrl, { headers: { 'APCA-API-KEY-ID': API_KEY, 'APCA-API-SECRET-KEY': SECRET_KEY } });
+        const snapData = await snapRes.json();
+
+        let html = '';
+        symbolList.forEach(symbol => {
+            const stock = snapData ? snapData[symbol] : null;
+            const bars = (barsData.bars && barsData.bars[symbol]) ? barsData.bars[symbol] : [];
+
+            const currentPrice = (stock && stock.latestTrade) ? stock.latestTrade.p : 0;
+            const high7Y = bars.length > 0 ? Math.max(...bars.map(b => b.h)) : 0;
+            
+            // Calculate % change (drawdown) if high is available
+            const pctChange = high7Y > 0 ? ((currentPrice - high7Y) / high7Y) * 100 : 0;
+
+            // Try to find full name from existing bubbles meta
+            const existingBody = Composite.allBodies(world).find(b => b.ticker === symbol);
+            const fullName = existingBody ? (existingBody._meta.name || symbol) : symbol;
+
+            html += `
+                <tr>
+                    <td>${fullName}</td>
+                    <td><strong style="color: #aaa">${symbol}</strong></td>
+                    <td class="text-right">${currentPrice > 0 ? '$' + currentPrice.toFixed(2) : 'N/A'}</td>
+                    <td class="text-right">${high7Y > 0 ? '$' + high7Y.toFixed(2) : 'N/A'}</td>
+                    <td class="text-right ${pctChange >= 0 ? 'pct-pos' : 'pct-neg'}">
+                        ${high7Y > 0 ? (pctChange >= 0 ? '+' : '') + pctChange.toFixed(2) + '%' : 'N/A'}
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    } catch (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: #ff3b3b; padding: 20px;">Failed to load data. Please check your API keys or connection.</td></tr>';
+    }
+};
 
 document.querySelectorAll('.timeframe-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -242,10 +342,14 @@ async function updateAnchorPrices() {
     } else if (selectedTimeframe === 'YTD') {
         start = new Date(now.getFullYear(), 0, 1);
         end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    } else if (selectedTimeframe === 'ATH') {
+        start = new Date();
+        start.setFullYear(now.getFullYear() - 7);
+        timeframe = '1Month'; // Use monthly bars to cover more years within the API limit
     }
     
     try {
-        const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbolList.join(',')}&timeframe=${timeframe}&start=${start.toISOString()}${end ? `&end=${end.toISOString()}` : ''}&limit=1000&adjustment=split`;
+        const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbolList.join(',')}&timeframe=${timeframe}&start=${start.toISOString()}${end ? `&end=${end.toISOString()}` : ''}&limit=10000&adjustment=split`;
         const response = await fetch(url, {
             headers: { 'APCA-API-KEY-ID': API_KEY, 'APCA-API-SECRET-KEY': SECRET_KEY }
         });
@@ -255,7 +359,12 @@ async function updateAnchorPrices() {
             Object.keys(data.bars).forEach(symbol => {
                 const symbolBars = data.bars[symbol];
                 if (symbolBars && symbolBars.length > 0) {
-                    anchorPrices[symbol] = symbolBars[0].c; 
+                    if (selectedTimeframe === 'ATH') {
+                        // For ATH, find the maximum high price reached in the historical data
+                        anchorPrices[symbol] = Math.max(...symbolBars.map(b => b.h));
+                    } else {
+                        anchorPrices[symbol] = symbolBars[0].c; 
+                    }
                 }
             });
         }
@@ -292,7 +401,11 @@ async function fetchAndCreateBubbles() {
                 referencePrice = anchorPrices[symbol];
             }
 
-            const change = (price && referencePrice) ? ((price - referencePrice) / referencePrice * 100) : 0;
+            let change = 0;
+            if (price && referencePrice) {
+                // Standard percentage change formula (Current - Reference) / Reference
+                change = ((price - referencePrice) / referencePrice) * 100;
+            }
 
                         const existing = bodies.find(b => b.ticker === symbol);
             if (existing) {
