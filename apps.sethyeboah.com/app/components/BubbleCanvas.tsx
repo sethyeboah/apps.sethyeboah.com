@@ -61,11 +61,14 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
     const minAbs = Math.min(...absChanges);
     const range = maxAbs - minAbs;
 
+    // Calculate a scale factor based on the smaller dimension of the canvas
+    const scaleFactor = Math.min(canvas.width, canvas.height) / 800;
+
     // Sync persistent bubbles with new stock data to prevent jumping on updates
     const bubbles: Bubble[] = stocks.map((stock, index) => {
       const existing = bubblesRef.current.find(b => b.stock.symbol === stock.symbol);
       const magnitude = Math.abs(stock.change);
-      const radius = range > 0 ? 30 + ((magnitude - minAbs) / range) * 60 : 50;
+      const radius = (range > 0 ? 30 + ((magnitude - minAbs) / range) * 60 : 50) * Math.max(0.6, scaleFactor);
 
       if (existing) {
         existing.stock = stock;
