@@ -241,6 +241,25 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
       if (e.cancelable) e.preventDefault();
     };
 
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!hasDragged) {
+        const touch = e.changedTouches[0];
+        const rect = canvas.getBoundingClientRect();
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+
+        bubbles.forEach(bubble => {
+          const distance = Math.sqrt(
+            Math.pow(touchX - bubble.x, 2) + Math.pow(touchY - bubble.y, 2)
+          );
+          if (distance < bubble.radius) {
+            onStockSelect(bubble.stock);
+          }
+        });
+      }
+      handleMouseUp();
+    };
+
     const handleMouseDown = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -299,7 +318,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
     canvas.addEventListener('click', handleClick);
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleMouseUp);
+    canvas.addEventListener('touchend', handleTouchEnd);
 
     // Draw static bubbles (no animation loop)
     const drawBubbles = () => {
@@ -430,7 +449,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
       canvas.removeEventListener('click', handleClick);
       canvas.removeEventListener('touchstart', handleTouchStart);
       canvas.removeEventListener('touchmove', handleTouchMove);
-      canvas.removeEventListener('touchend', handleMouseUp);
+      canvas.removeEventListener('touchend', handleTouchEnd);
       cancelAnimationFrame(animationId);
     };
   }, [stocks]);
