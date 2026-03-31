@@ -1,0 +1,391 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+
+interface Stock {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  marketCap: number;
+}
+
+interface Bubble {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  stock: Stock;
+  color: string;
+  isDragging?: boolean;
+}
+
+interface BubbleCanvasProps {
+  stocks: Stock[];
+  onStockSelect: (stock: Stock) => void;
+  searchTerm?: string;
+}
+
+export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }: BubbleCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bubblesRef = useRef<Bubble[]>([]);
+  const searchTermRef = useRef(searchTerm);
+  const mousePosRef = useRef({ x: -1000, y: -1000 });
+
+  // Keep searchTermRef updated without re-triggering the main animation effect
+  useEffect(() => {
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (!canvasRef.current || stocks.length === 0) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resizeCanvas = () => {
+      // Get parent container height
+      const container = canvas.parentElement;
+      if (container) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+      }
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const absChanges = stocks.map(s => Math.abs(s.change));
+    const maxAbs = Math.max(...absChanges);
+    const minAbs = Math.min(...absChanges);
+    const range = maxAbs - minAbs;
+
+    // Sync persistent bubbles with new stock data to prevent jumping on updates
+    const bubbles: Bubble[] = stocks.map((stock, index) => {
+      const existing = bubblesRef.current.find(b => b.stock.symbol === stock.symbol);
+      const magnitude = Math.abs(stock.change);
+      const radius = range > 0 ? 30 + ((magnitude - minAbs) / range) * 60 : 50;
+
+      if (existing) {
+        existing.stock = stock;
+        existing.radius = radius;
+        existing.color = stock.change >= 0 ? '#00ff00' : '#ff0000';
+        return existing;
+      } else {
+        const safeWidth = Math.max(0, canvas.width - 2 * radius);
+        const safeHeight = Math.max(0, canvas.height - 2 * radius);
+        return {
+          x: radius + Math.random() * safeWidth,
+          y: radius + Math.random() * safeHeight,
+          vx: (Math.random() - 0.5) * 2,
+          vy: (Math.random() - 0.5) * 2,
+          radius,
+          stock,
+          color: stock.change >= 0 ? '#00ff00' : '#ff0000',
+          isDragging: false
+        };
+      }
+    });
+    bubblesRef.current = bubbles;
+
+    const resolveCollisions = (iterations = 15) => {
+      for (let i = 0; i < iterations; i++) {
+        for (let j = 0; j < bubbles.length; j++) {
+          for (let k = j + 1; k < bubbles.length; k++) {
+            const b1 = bubbles[j];
+            const b2 = bubbles[k];
+            const dx = b2.x - b1.x;
+            const dy = b2.y - b1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = b1.radius + b2.radius + 2; // +2px padding
+
+            if (distance < minDistance) {
+              const overlap = minDistance - (distance || 0.1);
+              const nx = dx / (distance || 0.1);
+              const ny = dy / (distance || 0.1);
+
+              // Mass-weighted physics (Area is used as proxy for mass)
+              const m1 = b1.radius * b1.radius;
+              const m2 = b2.radius * b2.radius;
+
+              // Momentum-based bounce effect (restitution)
+              // Only apply impulse on the first iteration to prevent velocity explosion
+              if (i === 0) {
+                const rvx = b2.vx - b1.vx;
+                const rvy = b2.vy - b1.vy;
+                const velAlongNormal = rvx * nx + rvy * ny;
+
+                // Only resolve if bubbles are moving towards each other
+                if (velAlongNormal < 0) {
+                  const restitution = 0.6; // Tune for bounciness
+                  
+                  // If a bubble is being dragged, it acts as if it has infinite mass (invMass = 0)
+                  const invM1 = b1.isDragging ? 0 : 1 / m1;
+                  const invM2 = b2.isDragging ? 0 : 1 / m2;
+                  const jScalar = -(1 + restitution) * velAlongNormal / (invM1 + invM2);
+                  
+                  const impulseX = jScalar * nx;
+                  const impulseY = jScalar * ny;
+
+                  if (!b1.isDragging) {
+                    b1.vx -= impulseX * invM1;
+                    b1.vy -= impulseY * invM1;
+                  }
+                  if (!b2.isDragging) {
+                    b2.vx += impulseX * invM2;
+                    b2.vy += impulseY * invM2;
+                  }
+                }
+              }
+              
+              // Positional correction ratio based on mass
+              // Larger objects move less during overlap resolution
+              const totalMass = m1 + m2;
+              const ratio = b1.isDragging ? 1 : (b2.isDragging ? 0 : m2 / totalMass);
+
+              if (!b1.isDragging) {
+                b1.x -= nx * overlap * (1 - ratio);
+                b1.y -= ny * overlap * (1 - ratio);
+              }
+              if (!b2.isDragging) {
+                b2.x += nx * overlap * ratio;
+                b2.y += ny * overlap * ratio;
+              }
+            }
+          }
+        }
+      }
+      // Ensure all bubbles stay within the container after being pushed
+      bubbles.forEach(b => {
+        b.x = Math.max(b.radius, Math.min(canvas.width - b.radius, b.x));
+        b.y = Math.max(b.radius, Math.min(canvas.height - b.radius, b.y));
+      });
+    };
+
+    resolveCollisions();
+
+    let draggedBubble: Bubble | null = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let hasDragged = false;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      mousePosRef.current = { x: mouseX, y: mouseY };
+
+      if (draggedBubble) {
+        hasDragged = true;
+        const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
+        const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
+        
+        // Calculate velocity based on change in position to impart momentum during collisions
+        draggedBubble.vx = nextX - draggedBubble.x;
+        draggedBubble.vy = nextY - draggedBubble.y;
+
+        draggedBubble.x = nextX;
+        draggedBubble.y = nextY;
+
+        // Resolve collisions immediately during drag for better physical feedback
+        resolveCollisions();
+      }
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      hasDragged = false;
+
+      bubbles.forEach(bubble => {
+        const distance = Math.sqrt(
+          Math.pow(clickX - bubble.x, 2) + Math.pow(clickY - bubble.y, 2)
+        );
+        if (distance < bubble.radius) {
+          draggedBubble = bubble;
+          draggedBubble.isDragging = true;
+          dragOffsetX = clickX - bubble.x;
+          dragOffsetY = clickY - bubble.y;
+          return;
+        }
+      });
+    };
+
+    const handleMouseLeave = () => {
+      mousePosRef.current = { x: -1000, y: -1000 };
+      handleMouseUp();
+    };
+
+    const handleMouseUp = () => {
+      if (draggedBubble) {
+        draggedBubble.isDragging = false;
+        draggedBubble = null;
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      if (!hasDragged) {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        bubbles.forEach(bubble => {
+          const distance = Math.sqrt(
+            Math.pow(clickX - bubble.x, 2) + Math.pow(clickY - bubble.y, 2)
+          );
+          if (distance < bubble.radius) {
+            onStockSelect(bubble.stock);
+          }
+        });
+      }
+    };
+
+    // Add event listeners
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseLeave);
+    canvas.addEventListener('click', handleClick);
+
+    // Draw static bubbles (no animation loop)
+    const drawBubbles = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      bubbles.forEach(bubble => {
+        // Calculate if mouse is hovering over this bubble
+        const dx = mousePosRef.current.x - bubble.x;
+        const dy = mousePosRef.current.y - bubble.y;
+        const isHovered = Math.sqrt(dx * dx + dy * dy) < bubble.radius;
+
+        // Check if this bubble matches the search term
+        const isSearchHit = searchTermRef.current && 
+          bubble.stock.symbol.toLowerCase() === searchTermRef.current.trim().toLowerCase();
+
+        // Draw hover highlight
+        if (isHovered && !isSearchHit) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(bubble.x, bubble.y, bubble.radius + 2, 0, Math.PI * 2);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#ffffff';
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (isSearchHit) {
+          ctx.save();
+          const pulse = (Math.sin(Date.now() / 300) + 1) / 2; // Oscillates between 0 and 1
+          const extraRadius = 3 + pulse * 5; // Radius expands between 3px and 8px
+          const glowBlur = 15 + pulse * 15; // Glow blurs between 15px and 30px
+          
+          ctx.beginPath();
+          ctx.arc(bubble.x, bubble.y, bubble.radius + extraRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2 + pulse * 2; // Border thickens slightly
+          ctx.shadowBlur = glowBlur;
+          ctx.shadowColor = '#ffffff';
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.save();
+        
+        // Main bubble body
+        ctx.beginPath();
+        ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+        
+        // Minimalist Radial Gradient focused on the edge
+        const gradient = ctx.createRadialGradient(
+          bubble.x,
+          bubble.y,
+          bubble.radius * 0.7, // Inner edge of the gradient
+          bubble.x,
+          bubble.y,
+          bubble.radius
+        );
+        
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)'); // Transparent center
+        gradient.addColorStop(1, bubble.color);       // Colored edge
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Border stroke
+        ctx.strokeStyle = bubble.color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+
+        // Draw text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.max(14, bubble.radius / 3.5)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bubble.stock.symbol, bubble.x, bubble.y - bubble.radius * 0.25);
+        
+        ctx.font = `${Math.max(11, bubble.radius / 5)}px Arial`;
+        ctx.fillText(`$${bubble.stock.price.toFixed(2)}`, bubble.x, bubble.y + bubble.radius * 0.05);
+        
+        const changeText = `${bubble.stock.change >= 0 ? '+' : ''}${bubble.stock.change.toFixed(2)}%`;
+        ctx.fillStyle = bubble.stock.change >= 0 ? '#00ff00' : '#ff0000';
+        ctx.font = `bold ${Math.max(11, bubble.radius / 4.5)}px Arial`;
+        ctx.fillText(changeText, bubble.x, bubble.y + bubble.radius * 0.35);
+      });
+    };
+
+    let animationId: number;
+    const animate = () => {
+      bubbles.forEach(b => {
+        if (!b.isDragging) {
+          // Update position
+          b.x += b.vx;
+          b.y += b.vy;
+
+          // Friction
+          b.vx *= 0.985;
+          b.vy *= 0.985;
+
+          // Bounce off walls
+          if (b.x - b.radius < 0) { b.x = b.radius; b.vx = Math.abs(b.vx) * 0.7; }
+          else if (b.x + b.radius > canvas.width) { b.x = canvas.width - b.radius; b.vx = -Math.abs(b.vx) * 0.7; }
+
+          if (b.y - b.radius < 0) { b.y = b.radius; b.vy = Math.abs(b.vy) * 0.7; }
+          else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; b.vy = -Math.abs(b.vy) * 0.7; }
+          
+          // Ambient motion
+          b.vx += (Math.random() - 0.5) * 0.05;
+          b.vy += (Math.random() - 0.5) * 0.05;
+        }
+      });
+
+      resolveCollisions();
+      drawBubbles();
+      animationId = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('mouseleave', handleMouseLeave);
+      canvas.removeEventListener('click', handleClick);
+      cancelAnimationFrame(animationId);
+    };
+  }, [stocks]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full"
+    />
+  );
+}
