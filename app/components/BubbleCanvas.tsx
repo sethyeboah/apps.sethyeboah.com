@@ -171,6 +171,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
     let draggedBubble: Bubble | null = null;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
+    let touchStartX = 0;
+    let touchStartY = 0;
     let hasDragged = false;
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -204,6 +206,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
       const clickY = touch.clientY - rect.top;
 
       hasDragged = false;
+      touchStartX = clickX;
+      touchStartY = clickY;
 
       bubbles.forEach(bubble => {
         const distance = Math.sqrt(
@@ -227,7 +231,11 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
       const mouseY = touch.clientY - rect.top;
 
       mousePosRef.current = { x: mouseX, y: mouseY };
-      hasDragged = true;
+      
+      const dist = Math.sqrt(Math.pow(mouseX - touchStartX, 2) + Math.pow(mouseY - touchStartY, 2));
+      if (dist > 7) {
+        hasDragged = true;
+      }
 
       const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
       const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
@@ -242,20 +250,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
-      if (!hasDragged) {
-        const touch = e.changedTouches[0];
-        const rect = canvas.getBoundingClientRect();
-        const touchX = touch.clientX - rect.left;
-        const touchY = touch.clientY - rect.top;
-
-        bubbles.forEach(bubble => {
-          const distance = Math.sqrt(
-            Math.pow(touchX - bubble.x, 2) + Math.pow(touchY - bubble.y, 2)
-          );
-          if (distance < bubble.radius) {
-            onStockSelect(bubble.stock);
-          }
-        });
+      if (!hasDragged && draggedBubble) {
+        onStockSelect(draggedBubble.stock);
       }
       handleMouseUp();
     };
