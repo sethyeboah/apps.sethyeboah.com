@@ -197,6 +197,50 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
       }
     };
 
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const clickX = touch.clientX - rect.left;
+      const clickY = touch.clientY - rect.top;
+
+      hasDragged = false;
+
+      bubbles.forEach(bubble => {
+        const distance = Math.sqrt(
+          Math.pow(clickX - bubble.x, 2) + Math.pow(clickY - bubble.y, 2)
+        );
+        if (distance < bubble.radius) {
+          draggedBubble = bubble;
+          draggedBubble.isDragging = true;
+          dragOffsetX = clickX - bubble.x;
+          dragOffsetY = clickY - bubble.y;
+          if (e.cancelable) e.preventDefault();
+        }
+      });
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!draggedBubble) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = touch.clientX - rect.left;
+      const mouseY = touch.clientY - rect.top;
+
+      mousePosRef.current = { x: mouseX, y: mouseY };
+      hasDragged = true;
+
+      const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
+      const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
+      
+      draggedBubble.vx = nextX - draggedBubble.x;
+      draggedBubble.vy = nextY - draggedBubble.y;
+      draggedBubble.x = nextX;
+      draggedBubble.y = nextY;
+
+      resolveCollisions();
+      if (e.cancelable) e.preventDefault();
+    };
+
     const handleMouseDown = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -253,6 +297,9 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
     canvas.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('mouseleave', handleMouseLeave);
     canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleMouseUp);
 
     // Draw static bubbles (no animation loop)
     const drawBubbles = () => {
@@ -381,6 +428,9 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
       canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
       canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleMouseUp);
       cancelAnimationFrame(animationId);
     };
   }, [stocks]);
