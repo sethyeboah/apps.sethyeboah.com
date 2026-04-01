@@ -385,9 +385,9 @@ export default function StockBubbles() {
   }
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
+    <div className="relative h-[100dvh] flex flex-col bg-black overflow-hidden">
       {/* Header Container */}
-      <div className="relative bg-black p-4 z-10 border-b border-gray-800">
+      <div className="bg-black p-4 z-10 border-b border-gray-800 shrink-0">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
           <h1 className="text-xl sm:text-2xl font-bold text-white">Alpha Bubbles</h1>
           <div className="flex flex-row items-center gap-3 w-full md:w-auto">
@@ -409,17 +409,18 @@ export default function StockBubbles() {
           </div>
         </div>
 
-        {/* Thin Progress Bar for Data Updates */}
-        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-transparent overflow-hidden">
-          <div 
-            className={`h-full ${progressBarColorClass}`} // Removed CSS transition
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+      </div>
+
+      {/* Thin Progress Bar for Data Updates */}
+      <div className="w-full h-0.5 bg-transparent overflow-hidden shrink-0">
+        <div 
+          className={`h-full ${progressBarColorClass}`}
+          style={{ width: `${progress}%` }}
+        />
       </div>
 
       {/* Bubbles Container */}
-      <div className="relative w-full" style={{ height: 'calc(100vh - 80px)' }}>
+      <div className="relative w-full flex-1 overflow-hidden">
         <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} />
 
         {/* Market List Modal */}
@@ -506,7 +507,7 @@ export default function StockBubbles() {
             onClick={() => setSelectedStock(null)}
           >
             <div 
-              className="bg-gray-900 border border-gray-700 rounded-2xl p-6 sm:p-8 w-[95%] max-w-sm relative overflow-hidden"
+              className="bg-gray-900 border border-gray-700 rounded-2xl p-6 sm:p-8 w-[95%] max-w-sm relative max-h-full overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}
