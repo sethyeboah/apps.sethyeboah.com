@@ -13,13 +13,13 @@ interface Stock {
   prevClose?: number;
 }
 
-// Top 50 S&P 500 stocks by market cap
-const SP500_TOP_50 = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META', 'BRK.B', 'LLY', 'V',
-  'JPM', 'XOM', 'UNH', 'MA', 'HD', 'PG', 'JNJ', 'COST', 'ABBV', 'CVX',
-  'MRK', 'KO', 'PEP', 'TMO', 'BAC', 'AVGO', 'WMT', 'MCD', 'CSCO', 'LIN', 'DHR',
-  'ABT', 'CRM', 'NKE', 'ACN', 'ADBE', 'NFLX', 'CMCSA', 'PYPL', 'TXN', 'INTC',
-  'VZ', 'NEE', 'T', 'MDT', 'QCOM', 'WFC', 'IBM', 'GS', 'CAT', 'RTX'
+const SP500_SYMBOLS = [
+  'AAPL','MSFT','AMZN','GOOGL','NVDA','META','TSLA','BRK.B','UNH','JNJ','V','JPM','PG','MA','AVGO','HD','KO',
+  'PEP','MRK','VZ','CMCSA','ADBE','NFLX','NKE','INTC','T','ABT','XOM','CVX','CSCO','PFE','ORCL','TMO','WMT',
+  'LLY','CRM','ACN','COST','MCD','DHR','WFC','QCOM','MDT','NEE','HON','AMGN','ABBV','BMY','TXN','UPS','INTU','RTX',
+  'LOW','UNP','PM','MS','IBM','BIDU','SBUX','CAT','GE','AXP','MMM','GILD','AMD','LMT','BA','GS','AMT','BLK','CVS',
+  'SNY','CHTR','ADP','ISRG','SYK','MO','SPGI','CCI','PLD','CB','PYPL','ANTM','TGT','ADSK','DE','ZTS','MDLZ',
+  'SCHW','CI','BDX','LRCX','REGN','DUK','ETN','SYF'
 ];
 
 export default function StockBubbles() {
@@ -50,7 +50,7 @@ export default function StockBubbles() {
           return;
         }
 
-        const symbols = SP500_TOP_50.join(',');
+        const symbols = SP500_SYMBOLS.join(',');
         const response = await fetch(`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols}`, {
           headers: {
             'APCA-API-KEY-ID': apiKey,
@@ -62,7 +62,7 @@ export default function StockBubbles() {
 
         const snapshots = await response.json();
         
-        const updatedStocks: Stock[] = SP500_TOP_50.map(symbol => {
+        const updatedStocks: Stock[] = SP500_SYMBOLS.map(symbol => {
           const snapshot = snapshots[symbol];
           const price = snapshot?.latestTrade?.p || 0;
           const prevClose = snapshot?.prevDailyBar?.c || price;
@@ -88,7 +88,7 @@ export default function StockBubbles() {
         if (isInitial) {
           setError('Failed to fetch market data.');
           // Fallback initialization
-          setStocks(SP500_TOP_50.map(symbol => ({
+          setStocks(SP500_SYMBOLS.map(symbol => ({
             symbol,
             name: symbol,
             price: 0,
@@ -117,8 +117,8 @@ export default function StockBubbles() {
           setTimeout(() => {
             wsRef.current?.send(JSON.stringify({
               action: 'subscribe',
-              trades: SP500_TOP_50,
-              dailyBars: SP500_TOP_50
+              trades: SP500_SYMBOLS,
+              dailyBars: SP500_SYMBOLS
             }));
           }, 1000);
         };
@@ -291,7 +291,7 @@ export default function StockBubbles() {
       setListLoading(true);
       const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
       const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
-      const symbols = SP500_TOP_50.join(',');
+      const symbols = SP500_SYMBOLS.join(',');
 
       const now = new Date();
       const endStr = now.toISOString();
@@ -318,7 +318,7 @@ export default function StockBubbles() {
       ];
 
       const results: Record<string, Record<string, number | null>> = {};
-      SP500_TOP_50.forEach(s => results[s] = {});
+      SP500_SYMBOLS.forEach(s => results[s] = {});
 
       try {
         await Promise.all(timeframes.map(async ({ label, tf, start }) => {
@@ -455,7 +455,7 @@ export default function StockBubbles() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
-                  {SP500_TOP_50.map(symbol => {
+                  {SP500_SYMBOLS.map(symbol => {
                     const data = listHistoricalData[symbol] || {};
                     const currentStock = stocks.find(s => s.symbol === symbol);
                     return (
