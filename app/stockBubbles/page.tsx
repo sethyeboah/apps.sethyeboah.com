@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import BubbleCanvas from '../components/BubbleCanvas';
 import StockChart from '../components/StockChart';
 
@@ -13,14 +13,106 @@ interface Stock {
   prevClose?: number;
 }
 
-const SP500_SYMBOLS = [
-  'AAPL','MSFT','AMZN','GOOGL','NVDA','META','TSLA','BRK.B','UNH','JNJ','V','JPM','PG','MA','AVGO','HD','KO',
-  'PEP','MRK','VZ','CMCSA','ADBE','NFLX','NKE','INTC','T','ABT','XOM','CVX','CSCO','PFE','ORCL','TMO','WMT',
-  'LLY','CRM','ACN','COST','MCD','DHR','WFC','QCOM','MDT','NEE','HON','AMGN','ABBV','BMY','TXN','UPS','INTU','RTX',
-  'LOW','UNP','PM','MS','IBM','BIDU','SBUX','CAT','GE','AXP','MMM','GILD','AMD','LMT','BA','GS','AMT','BLK','CVS',
-  'SNY','CHTR','ADP','ISRG','SYK','MO','SPGI','CCI','PLD','CB','PYPL','ANTM','TGT','ADSK','DE','ZTS','MDLZ',
-  'SCHW','CI','BDX','LRCX','REGN','DUK','ETN','SYF'
-];
+const SYMBOL_NAMES: Record<string, string> = {
+  'AAPL': 'Apple Inc.',
+  'MSFT': 'Microsoft Corporation',
+  'AMZN': 'Amazon.com, Inc.',
+  'GOOGL': 'Alphabet Inc.',
+  'NVDA': 'NVIDIA Corporation',
+  'META': 'Meta Platforms, Inc.',
+  'TSLA': 'Tesla, Inc.',
+  'BRK.B': 'Berkshire Hathaway Inc.',
+  'UNH': 'UnitedHealth Group Incorporated',
+  'JNJ': 'Johnson & Johnson',
+  'V': 'Visa Inc.',
+  'JPM': 'JPMorgan Chase & Co.',
+  'PG': 'The Procter & Gamble Company',
+  'MA': 'Mastercard Incorporated',
+  'AVGO': 'Broadcom Inc.',
+  'HD': 'The Home Depot, Inc.',
+  'KO': 'The Coca-Cola Company',
+  'PEP': 'PepsiCo, Inc.',
+  'MRK': 'Merck & Co., Inc.',
+  'VZ': 'Verizon Communications Inc.',
+  'CMCSA': 'Comcast Corporation',
+  'ADBE': 'Adobe Inc.',
+  'NFLX': 'Netflix, Inc.',
+  'NKE': 'NIKE, Inc.',
+  'INTC': 'Intel Corporation',
+  'T': 'AT&T Inc.',
+  'ABT': 'Abbott Laboratories',
+  'XOM': 'Exxon Mobil Corporation',
+  'CVX': 'Chevron Corporation',
+  'CSCO': 'Cisco Systems, Inc.',
+  'PFE': 'Pfizer Inc.',
+  'ORCL': 'Oracle Corporation',
+  'TMO': 'Thermo Fisher Scientific Inc.',
+  'WMT': 'Walmart Inc.',
+  'LLY': 'Eli Lilly and Company',
+  'CRM': 'Salesforce, Inc.',
+  'ACN': 'Accenture plc',
+  'COST': 'Costco Wholesale Corporation',
+  'MCD': 'McDonald\'s Corporation',
+  'DHR': 'Danaher Corporation',
+  'WFC': 'Wells Fargo & Company',
+  'QCOM': 'QUALCOMM Incorporated',
+  'MDT': 'Medtronic plc',
+  'NEE': 'NextEra Energy, Inc.',
+  'HON': 'Honeywell International Inc.',
+  'AMGN': 'Amgen Inc.',
+  'ABBV': 'AbbVie Inc.',
+  'BMY': 'Bristol-Myers Squibb Company',
+  'TXN': 'Texas Instruments Incorporated',
+  'UPS': 'United Parcel Service, Inc.',
+  'INTU': 'Intuit Inc.',
+  'RTX': 'Raytheon Technologies Corporation',
+  'LOW': 'Lowe\'s Companies, Inc.',
+  'UNP': 'Union Pacific Corporation',
+  'PM': 'Philip Morris International Inc.',
+  'MS': 'Morgan Stanley',
+  'IBM': 'International Business Machines Corporation',
+  'BIDU': 'Baidu, Inc.',
+  'SBUX': 'Starbucks Corporation',
+  'CAT': 'Caterpillar Inc.',
+  'GE': 'General Electric Company',
+  'AXP': 'American Express Company',
+  'MMM': '3M Company',
+  'GILD': 'Gilead Sciences, Inc.',
+  'AMD': 'Advanced Micro Devices, Inc.',
+  'LMT': 'Lockheed Martin Corporation',
+  'BA': 'The Boeing Company',
+  'GS': 'Goldman Sachs Group, Inc.',
+  'AMT': 'American Tower Corporation',
+  'BLK': 'BlackRock, Inc.',
+  'CVS': 'CVS Health Corporation',
+  'SNY': 'Sanofi',
+  'CHTR': 'Charter Communications, Inc.',
+  'ADP': 'Automatic Data Processing, Inc.',
+  'ISRG': 'Intuitive Surgical, Inc.',
+  'SYK': 'Stryker Corporation',
+  'MO': 'Altria Group, Inc.',
+  'SPGI': 'S&P Global Inc.',
+  'CCI': 'Crown Castle International Corp.',
+  'PLD': 'Prologis, Inc.',
+  'CB': 'Chubb Limited',
+  'PYPL': 'PayPal Holdings, Inc.',
+  'ANTM': 'Anthem, Inc.',
+  'TGT': 'Target Corporation',
+  'ADSK': 'Adobe Inc.',
+  'DE': 'Deere & Company',
+  'ZTS': 'Zoetis Inc.',
+  'MDLZ': 'Mondelez International, Inc.',
+  'SCHW': 'The Charles Schwab Corporation',
+  'CI': 'Cigna Corporation',
+  'BDX': 'Becton, Dickinson and Company',
+  'LRCX': 'Lam Research Corporation',
+  'REGN': 'Regeneron Pharmaceuticals, Inc.',
+  'DUK': 'Duke Energy Corporation',
+  'ETN': 'Eaton Corporation plc',
+  'SYF': 'Synchrony Financial'
+};
+
+const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
 
 export default function StockBubbles() {
   const [stocks, setStocks] = useState<Stock[]>([]);
@@ -32,6 +124,8 @@ export default function StockBubbles() {
   const lastMatchedTermRef = useRef('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isListOpen, setIsListOpen] = useState(false);
+  const [listSearchQuery, setListSearchQuery] = useState('');
+  const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
   const [listHistoricalData, setListHistoricalData] = useState<Record<string, Record<string, number | null>>>({});
@@ -71,7 +165,7 @@ export default function StockBubbles() {
 
           return {
             symbol,
-            name: symbol,
+            name: SYMBOL_NAMES[symbol] || symbol,
             price,
             change,
             prevClose,
@@ -91,7 +185,7 @@ export default function StockBubbles() {
           // Fallback initialization
           setStocks(SP500_SYMBOLS.map(symbol => ({
             symbol,
-            name: symbol,
+            name: SYMBOL_NAMES[symbol] || symbol,
             price: 0,
             change: 0,
             marketCap: 1000000000000
@@ -361,6 +455,22 @@ export default function StockBubbles() {
     fetchAllHistorical();
   }, [isListOpen]);
 
+  // Filter and Search logic for the market list
+  const filteredListSymbols = useMemo(() => {
+    return SP500_SYMBOLS.filter(symbol => {
+      const stock = stocks.find(s => s.symbol === symbol);
+      const name = SYMBOL_NAMES[symbol] || '';
+      const query = listSearchQuery.toLowerCase();
+      
+      const matchesSearch = symbol.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+
+      if (listFilter === 'gainers') return (stock?.change || 0) > 0;
+      if (listFilter === 'losers') return (stock?.change || 0) < 0;
+      return true;
+    });
+  }, [listSearchQuery, listFilter, stocks]);
+
   // Determine overall market sentiment for progress bar color
   const totalChange = stocks.reduce((sum, stock) => sum + stock.change, 0);
   const averageChange = stocks.length > 0 ? totalChange / stocks.length : 0;
@@ -497,11 +607,53 @@ export default function StockBubbles() {
               </button>
             </div>
 
+            {/* Search and Filter Controls */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 mb-6">
+              <div className="relative flex-grow max-w-md">
+                <input
+                  type="text"
+                  placeholder="Search by name or ticker..."
+                  value={listSearchQuery}
+                  onChange={(e) => setListSearchQuery(e.target.value)}
+                  className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2.5 pl-10 pr-4 focus:outline-none focus:border-white/50 transition-colors"
+                />
+                <svg className="w-5 h-5 text-gray-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {listSearchQuery && (
+                  <button 
+                    onClick={() => setListSearchQuery('')}
+                    className="absolute right-3 top-3 text-gray-500 hover:text-white"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-800 self-start md:self-auto">
+                {(['all', 'gainers', 'losers'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setListFilter(f)}
+                    className={`px-4 py-1.5 rounded-md text-[10px] font-black transition-all uppercase tracking-widest ${
+                      listFilter === f 
+                        ? 'bg-gray-800 text-white shadow-lg' 
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex-grow overflow-x-auto overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/20">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-900 sticky top-0 z-10 shadow-lg">
                   <tr>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 whitespace-nowrap">Ticker</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 whitespace-nowrap">Company / Ticker</th>
                     <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">Price</th>
                     <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1H Close</th>
                     <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1D Close</th>
@@ -512,7 +664,7 @@ export default function StockBubbles() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
-                  {SP500_SYMBOLS.map(symbol => {
+                  {filteredListSymbols.map(symbol => {
                     const data = listHistoricalData[symbol] || {};
                     const currentStock = stocks.find(s => s.symbol === symbol);
                     return (
@@ -520,7 +672,10 @@ export default function StockBubbles() {
                         setSelectedStock(stocks.find(s => s.symbol === symbol) || null);
                         setIsListOpen(false);
                       }}>
-                        <td className="p-3 sm:p-4 text-white font-black text-base sm:text-lg">{symbol}</td>
+                        <td className="p-3 sm:p-4">
+                          <div className="text-white font-bold text-sm sm:text-base leading-tight">{currentStock?.name || symbol}</div>
+                          <div className="text-gray-500 text-xs sm:text-sm leading-tight">{symbol}</div>
+                        </td>
                         <td className="p-3 sm:p-4 font-mono text-white text-xs sm:text-sm text-right">
                           {currentStock ? `$${currentStock.price.toFixed(2)}` : '---'}
                         </td>
@@ -547,6 +702,11 @@ export default function StockBubbles() {
                   })}
                 </tbody>
               </table>
+              {filteredListSymbols.length === 0 && !listLoading && (
+                <div className="p-12 text-center text-gray-600 font-bold tracking-widest uppercase text-sm">
+                  No stocks match your search or filter
+                </div>
+              )}
               {listLoading && (
                 <div className="p-8 text-center text-gray-500 animate-pulse font-bold tracking-widest">
                   FETCHING MARKET DATA...
@@ -577,10 +737,10 @@ export default function StockBubbles() {
               </button>
 
               <div className="mb-8">
-                <h3 className="text-3xl sm:text-4xl font-bold text-white tracking-tight leading-none mb-2">
-                  {selectedStock.symbol}
+                <h3 className="text-2xl sm:text-3xl font-bold text-white tracking-tight leading-tight mb-1">
+                  {selectedStock.name}
                 </h3>
-                <p className="text-gray-400 text-sm font-medium">{selectedStock.name}</p>
+                <p className="text-gray-500 text-base font-bold tracking-widest">{selectedStock.symbol}</p>
               </div>
               
               {/* Real-time Historical Chart */}
