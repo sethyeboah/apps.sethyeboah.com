@@ -30,6 +30,7 @@ export default function StockBubbles() {
   const [searchTerm, setSearchTerm] = useState('');
   const [progress, setProgress] = useState(0);
   const lastMatchedTermRef = useRef('');
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isListOpen, setIsListOpen] = useState(false);
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
@@ -388,27 +389,82 @@ export default function StockBubbles() {
     <div className="relative h-[100dvh] flex flex-col bg-black overflow-hidden">
       {/* Header Container */}
       <div className="bg-black p-4 z-10 border-b border-gray-800 shrink-0">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
-          <h1 className="text-xl sm:text-2xl font-bold text-white">Alpha Bubbles</h1>
-          <div className="flex flex-row items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center justify-between gap-4 px-2">
+          {/* Title - Hidden on mobile when searching */}
+          <h1 className={`text-xl sm:text-2xl font-bold text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
+            Alpha Bubbles
+          </h1>
+
+          {/* Mobile Search View (Active) */}
+          {isSearchExpanded && (
+            <div className="flex items-center gap-3 w-full md:hidden">
+              <button 
+                onClick={() => {
+                  setIsSearchExpanded(false);
+                  setSearchTerm('');
+                }}
+                className="p-2 text-gray-400 hover:text-white bg-gray-900 rounded-lg border border-gray-700"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+              <div className="relative flex-1">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search ticker..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:border-white/50 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Actions (Icons) - Hidden when searching */}
+          {!isSearchExpanded && (
+            <div className="flex items-center gap-2 md:hidden">
+              <button
+                onClick={() => setIsListOpen(true)}
+                className="p-2 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
+                aria-label="View Market List"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setIsSearchExpanded(true)}
+                className="p-2 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
+                aria-label="Open Search"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Desktop Controls - Always visible on larger screens */}
+          <div className="hidden md:flex flex-row items-center gap-3 w-auto">
             <button
               onClick={() => setIsListOpen(true)}
-              className="flex-1 md:flex-none bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-4 sm:px-6 font-bold hover:bg-gray-800 transition-colors"
+              className="bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-6 font-bold hover:bg-gray-800 transition-colors"
             >
               List
             </button>
-            <div className="relative flex-[2] md:w-64">
-            <input
-              type="text"
-              placeholder="Search ticker (e.g. AAPL)..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:border-white/50 transition-colors"
-            />
-          </div>
+            <div className="relative w-64">
+              <input
+                type="text"
+                placeholder="Search ticker (e.g. AAPL)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:border-white/50 transition-colors"
+              />
+            </div>
           </div>
         </div>
-
       </div>
 
       {/* Thin Progress Bar for Data Updates */}
