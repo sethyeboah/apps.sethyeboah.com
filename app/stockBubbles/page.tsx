@@ -125,6 +125,7 @@ export default function StockBubbles() {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isListOpen, setIsListOpen] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
+  const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
   const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
@@ -498,12 +499,32 @@ export default function StockBubbles() {
   return (
     <div className="relative h-[100dvh] flex flex-col bg-black overflow-hidden">
       {/* Header Container */}
-      <div className="bg-black p-4 z-10 border-b border-gray-800 shrink-0">
+      <div className="bg-black p-4 z-10 border-b border-gray-800 shrink-0"> {/* z-index remains 10 */}
         <div className="flex items-center justify-between gap-4 px-2">
-          {/* Title - Hidden on mobile when searching */}
-          <h1 className={`text-xl sm:text-2xl font-bold text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
-            Alpha Bubbles
-          </h1>
+          {/* Left side: Title and Timeframes */}
+          <div className="flex items-center gap-4"> {/* Grouping title and timeframes */}
+            {/* Title - Hidden on mobile when searching */}
+            <h1 className={`text-xl sm:text-2xl font-bold text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
+              Alpha Bubbles
+            </h1>
+
+            {/* Timeframe Selector (Desktop Only) */}
+            <div className="hidden md:flex items-center gap-1"> {/* Visible on medium screens and up */}
+              {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setActiveTimeframe(tf)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    activeTimeframe === tf
+                      ? 'bg-gray-700 text-white' // Active state styling
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800' // Inactive state styling
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Mobile Search View (Active) */}
           {isSearchExpanded && (
@@ -790,6 +811,25 @@ export default function StockBubbles() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Mobile Footer with Timeframes */}
+      <div className="md:hidden bg-black p-2 z-10 border-t border-gray-800 shrink-0 overflow-x-auto">
+        <div className="flex items-center justify-center gap-1 min-w-max px-2">
+          {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
+            <button
+              key={tf}
+              onClick={() => setActiveTimeframe(tf)}
+              className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${
+                activeTimeframe === tf
+                  ? 'bg-gray-700 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-white hover:bg-gray-900'
+              }`}
+            >
+              {tf}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
