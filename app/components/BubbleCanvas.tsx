@@ -292,17 +292,17 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
     const handleClick = (e: MouseEvent) => {
       if (!hasDragged) {
         const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
+        const clickX = e.clientX - rect.left; // Get click X relative to canvas
+        const clickY = e.clientY - rect.top; // Get click Y relative to canvas
 
-        bubbles.forEach(bubble => {
-          const distance = Math.sqrt(
-            Math.pow(clickX - bubble.x, 2) + Math.pow(clickY - bubble.y, 2)
-          );
+        // Iterate through bubbles to find if any was clicked
+        for (const bubble of bubbles) {
+          const distance = Math.sqrt(Math.pow(clickX - bubble.x, 2) + Math.pow(clickY - bubble.y, 2));
           if (distance < bubble.radius) {
-            onStockSelect(bubble.stock);
+            onStockSelect(bubble.stock); // Select the stock if click is within bubble radius
+            break; // Exit loop after finding the first clicked bubble
           }
-        });
+        }
       }
     };
 
@@ -387,20 +387,118 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '' }:
         ctx.stroke();
         ctx.restore();
 
-        // Draw text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.max(14, bubble.radius / 3.5)}px Arial`;
+        // --- Text Drawing Logic ---
+        const radius = bubble.radius;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(bubble.stock.symbol, bubble.x, bubble.y - bubble.radius * 0.25);
-        
-        ctx.font = `${Math.max(11, bubble.radius / 5)}px Arial`;
-        ctx.fillText(`$${bubble.stock.price.toFixed(2)}`, bubble.x, bubble.y + bubble.radius * 0.05);
-        
+
+        // Define padding for text inside the bubble
+        const textHorizontalPadding = radius * 0.2; // 20% of radius as padding on each side
+        const innerWidth = radius * 2 - 2 * textHorizontalPadding;
+        const textVerticalPadding = radius * 0.1; // 10% of radius as padding top/bottom
+        const innerHeight = radius * 2 - 2 * textVerticalPadding;
+
+        // Helper to get text width for a given font size and style
+        const getTextWidth = (text: string, fontSize: number, style: string) => {
+          ctx.font = `${style} ${fontSize}px Arial`;
+          return ctx.measureText(text).width;
+        };
+
+        // Helper to get text height for a given font size and style
+        const getTextHeight = (text: string, fontSize: number, style: string) => {
+          ctx.font = `${style} ${fontSize}px Arial`;
+          const metrics = ctx.measureText(text);
+          return metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+        };
+
+        const symbolText = bubble.stock.symbol;
+        const priceText = `$${bubble.stock.price.toFixed(2)}`;
         const changeText = `${bubble.stock.change >= 0 ? '+' : ''}${bubble.stock.change.toFixed(2)}%`;
-        ctx.fillStyle = bubble.stock.change >= 0 ? '#00ff00' : '#ff0000';
-        ctx.font = `bold ${Math.max(11, bubble.radius / 4.5)}px Arial`;
-        ctx.fillText(changeText, bubble.x, bubble.y + bubble.radius * 0.35);
+
+        // Initial font size calculations with a target minimum of 16px
+        let symbolFontSize = Math.max(16, radius / 3.2); // Minimum 16px as per request
+        let priceFontSize = Math.max(9, radius / 5.5);   // Minimum 9px as per request
+        let changeFontSize = Math.max(9, radius / 5);   // Minimum 9px as per request
+
+        // Iteratively reduce font sizes to fit horizontally within innerWidth
+        // Prioritize symbol, then price, then change
+        let currentSymbolWidth = getTextWidth(symbolText, symbolFontSize, 'bold');
+        while (currentSymbolWidth > innerWidth && symbolFontSize > 1) {
+          symbolFontSize--;
+          currentSymbolWidth = getTextWidth(symbolText, symbolFontSize, 'bold');
+        }
+
+        let currentPriceWidth = getTextWidth(priceText, priceFontSize, 'normal');
+        while (currentPriceWidth > innerWidth && priceFontSize > 1) {
+          priceFontSize--;
+          currentPriceWidth = getTextWidth(priceText, priceFontSize, 'normal');
+        }
+
+        let currentChangeWidth = getTextWidth(changeText, changeFontSize, 'bold');
+        while (currentChangeWidth > innerWidth && changeFontSize > 1) {
+          changeFontSize--;
+          currentChangeWidth = getTextWidth(changeText, changeFontSize, 'bold');
+        }
+
+        // Calculate heights with potentially reduced font sizes
+        const symbolHeight = getTextHeight(symbolText, symbolFontSize, 'bold');
+        const priceHeight = getTextHeight(priceText, priceFontSize, 'normal');
+        const changeHeight = getTextHeight(changeText, changeFontSize, 'bold');
+
+        // Total vertical space needed for text block, including small internal spacing
+        const lineSpacing = radius * 0.05; // Small spacing between lines
+        let totalTextHeight = symbolHeight + priceHeight + changeHeight + 2 * lineSpacing;
+
+        // If total text height exceeds innerHeight, scale down all font sizes proportionally
+        if (totalTextHeight > innerHeight && totalTextHeight > 0) { // Avoid division by zero
+          const scaleRatio = innerHeight / totalTextHeight;
+          symbolFontSize *= scaleRatio;
+          priceFontSize *= scaleRatio;
+          changeFontSize *= scaleRatio;
+
+          // Recalculate heights with scaled font sizes for accurate positioning
+          // This is important because getTextHeight might return slightly different values for fractional font sizes
+          totalTextHeight = getTextHeight(symbolText, symbolFontSize, 'bold') +
+                            getTextHeight(priceText, priceFontSize, 'normal') +
+                            getTextHeight(changeText, changeFontSize, 'bold') + 2 * lineSpacing;
+        }
+
+        // Only draw if the bubble is large enough to show meaningful text (e.g., at least 16px font size for symbol, or a reasonable radius)
+        if (symbolFontSize >= 16 || radius > 25) { // Adjusted condition to prioritize readability
+          // Calculate starting Y for the top line to center the block
+          const startY = bubble.y - totalTextHeight / 2;
+
+          // Price (Top)
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `${priceFontSize}px Arial`;
+          ctx.fillText(priceText, bubble.x, startY + getTextHeight(priceText, priceFontSize, 'normal') / 2);
+          
+          // Symbol (Middle)
+          ctx.font = `bold ${symbolFontSize}px Arial`;
+          ctx.fillText(symbolText, bubble.x, startY + getTextHeight(priceText, priceFontSize, 'normal') + lineSpacing + getTextHeight(symbolText, symbolFontSize, 'bold') / 2);
+          
+          // Change % (Bottom)
+          ctx.fillStyle = bubble.stock.change >= 0 ? '#00ff00' : '#ff0000';
+          ctx.font = `bold ${changeFontSize}px Arial`;
+          ctx.fillText(changeText, bubble.x, startY + getTextHeight(priceText, priceFontSize, 'normal') + getTextHeight(symbolText, symbolFontSize, 'bold') + 2 * lineSpacing + getTextHeight(changeText, changeFontSize, 'bold') / 2);
+        } else if (radius > 10) {
+          // For smaller bubbles, show only the symbol centered
+          // Re-calculate symbol font size for single line display, ensuring it fits horizontally and vertically
+          let singleSymbolFontSize = Math.max(16, radius / 2);
+          let currentSingleSymbolWidth = getTextWidth(symbolText, singleSymbolFontSize, 'bold');
+          while (currentSingleSymbolWidth > innerWidth && singleSymbolFontSize > 1) {
+            singleSymbolFontSize--;
+            currentSingleSymbolWidth = getTextWidth(symbolText, singleSymbolFontSize, 'bold');
+          }
+          let singleSymbolHeight = getTextHeight(symbolText, singleSymbolFontSize, 'bold');
+          if (singleSymbolHeight > innerHeight && singleSymbolHeight > 0) {
+            singleSymbolFontSize *= (innerHeight / singleSymbolHeight);
+          }
+          
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${singleSymbolFontSize}px Arial`;
+          ctx.fillText(bubble.stock.symbol, bubble.x, bubble.y);
+        }
       });
     };
 
