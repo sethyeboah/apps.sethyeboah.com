@@ -283,6 +283,120 @@ export default function StockBubbles() {
     };
   }, []);
 
+  const runOneDayLogic = async () => {
+    const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
+    const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
+    if (!apiKey || !secretKey) return;
+
+    const oneDayStockPricesAndPercentages: Array<{
+      symbol: string;
+      lastButOneClosingPrice: number;
+      percentageChangeFromLastToCurrent: number;
+    }> = [];
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    const start = thirtyDaysAgo.toISOString();
+    const end = now.toISOString();
+
+    for (const symbol of SP500_SYMBOLS) {
+      try {
+        const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1D&start=${start}&end=${end}&limit=30&adjustment=raw&feed=iex&sort=asc`;
+        const response = await fetch(url, {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': secretKey,
+          },
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const bars = data.bars?.[symbol];
+
+        if (bars && bars.length >= 2) {
+          const lastButOneClosingPrice = bars[bars.length - 2].c;
+          const currentPrice = bars[bars.length - 1].c;
+          const percentageChangeFromLastToCurrent = ((currentPrice - lastButOneClosingPrice) / lastButOneClosingPrice) * 100;
+
+          oneDayStockPricesAndPercentages.push({
+            symbol,
+            lastButOneClosingPrice,
+            percentageChangeFromLastToCurrent
+          });
+
+          console.log('oneDayStockPricesAndPercentages:', oneDayStockPricesAndPercentages);
+
+          setStocks(prev => prev.map(s => 
+            s.symbol === symbol 
+              ? { ...s, price: lastButOneClosingPrice, change: percentageChangeFromLastToCurrent } 
+              : s
+          ));
+        }
+      } catch (err) {
+        console.error(`Error in 1D logic for ${symbol}:`, err);
+      }
+    }
+  };
+
+  const runOneHourLogic = async () => {
+    const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
+    const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
+    if (!apiKey || !secretKey) return;
+
+    const oneHourStockPricesAndPercentages: Array<{
+      symbol: string;
+      lastButOneClosingPrice: number;
+      percentageChangeFromLastToCurrent: number;
+    }> = [];
+
+    const now = new Date();
+    const oneHundredHoursAgo = new Date();
+    oneHundredHoursAgo.setHours(now.getHours() - 100);
+    const start = oneHundredHoursAgo.toISOString();
+    const end = now.toISOString();
+
+    for (const symbol of SP500_SYMBOLS) {
+      try {
+        const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1H&start=${start}&end=${end}&limit=100&adjustment=raw&feed=iex&sort=asc`;
+        const response = await fetch(url, {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': secretKey,
+          },
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const bars = data.bars?.[symbol];
+
+        if (bars && bars.length >= 2) {
+          const lastButOneClosingPrice = bars[bars.length - 2].c;
+          const currentPrice = bars[bars.length - 1].c;
+          const percentageChangeFromLastToCurrent = ((currentPrice - lastButOneClosingPrice) / lastButOneClosingPrice) * 100;
+
+          oneHourStockPricesAndPercentages.push({
+            symbol,
+            lastButOneClosingPrice,
+            percentageChangeFromLastToCurrent
+          });
+
+          console.log('oneHourStockPricesAndPercentages:', oneHourStockPricesAndPercentages);
+
+          setStocks(prev => prev.map(s => 
+            s.symbol === symbol 
+              ? { ...s, price: lastButOneClosingPrice, change: percentageChangeFromLastToCurrent } 
+              : s
+          ));
+        }
+      } catch (err) {
+        console.error(`Error in 1H logic for ${symbol}:`, err);
+      }
+    }
+  };
+
   // Fetch historical candle data when a stock is selected
   useEffect(() => {
     if (!selectedStock) {
@@ -513,7 +627,11 @@ export default function StockBubbles() {
               {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
                 <button
                   key={tf}
-                  onClick={() => setActiveTimeframe(tf)}
+                  onClick={() => {
+                    setActiveTimeframe(tf);
+                    if (tf === '1D') runOneDayLogic();
+                    if (tf === '1H') runOneHourLogic();
+                  }}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     activeTimeframe === tf
                       ? 'bg-gray-700 text-white' // Active state styling
@@ -819,7 +937,11 @@ export default function StockBubbles() {
           {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
             <button
               key={tf}
-              onClick={() => setActiveTimeframe(tf)}
+              onClick={() => {
+                setActiveTimeframe(tf);
+                if (tf === '1D') runOneDayLogic();
+                if (tf === '1H') runOneHourLogic();
+              }}
               className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${
                 activeTimeframe === tf
                   ? 'bg-gray-700 text-white shadow-sm'
