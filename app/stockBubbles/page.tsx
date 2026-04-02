@@ -317,6 +317,63 @@ export default function StockBubbles() {
     }
   }, []);
 
+  const runATHLogic = useCallback(async () => {
+    const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
+    const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
+    if (!apiKey || !secretKey) return;
+
+    const athStockPricesAndPercentages: Array<{
+      symbol: string;
+      athPrice: number;
+      percentageChangeToATH: number;
+    }> = [];
+
+    const now = new Date();
+    const eightyThreeMonthsAgo = new Date();
+    eightyThreeMonthsAgo.setMonth(now.getMonth() - 83);
+    const start = eightyThreeMonthsAgo.toISOString();
+    const end = now.toISOString();
+
+    for (const symbol of SP500_SYMBOLS) {
+      try {
+        const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1M&start=${start}&end=${end}&limit=100&adjustment=split&feed=iex&sort=asc`;
+        const response = await fetch(url, {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': secretKey,
+          },
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const bars = data.bars?.[symbol];
+
+        if (bars && bars.length > 0) {
+          const athPrice = Math.max(...bars.map((b: any) => b.h));
+          const currentPrice = bars[bars.length - 1].c;
+          const percentageChangeToATH = currentPrice !== 0 ? ((athPrice - currentPrice) / currentPrice) * 100 : 0;
+
+          athStockPricesAndPercentages.push({
+            symbol,
+            athPrice,
+            percentageChangeToATH
+          });
+
+          console.log('athStockPricesAndPercentages:', athStockPricesAndPercentages);
+
+          setStocks(prev => prev.map(s => 
+            s.symbol === symbol 
+              ? { ...s, price: athPrice, change: percentageChangeToATH } 
+              : s
+          ));
+        }
+      } catch (err) {
+        console.error(`Error in ATH logic for ${symbol}:`, err);
+      }
+    }
+  }, []);
+
   const runOneHourLogic = useCallback(async () => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
@@ -393,6 +450,8 @@ export default function StockBubbles() {
         runOneHourLogic();
       } else if (activeTimeframe === '1D') {
         runOneDayLogic();
+      } else if (activeTimeframe === 'ATH') {
+        runATHLogic();
       } else {
         fetchStockData(false);
       }
@@ -406,7 +465,7 @@ export default function StockBubbles() {
       clearInterval(pollInterval);
       clearInterval(progressTimer);
     };
-  }, [activeTimeframe, runOneHourLogic, runOneDayLogic, fetchStockData]);
+  }, [activeTimeframe, runOneHourLogic, runOneDayLogic, runATHLogic, fetchStockData]);
 
   // Fetch historical candle data when a stock is selected
   useEffect(() => {
@@ -643,6 +702,7 @@ export default function StockBubbles() {
                     setProgress(0);
                     if (tf === '1D') runOneDayLogic();
                     if (tf === '1H') runOneHourLogic();
+                    if (tf === 'ATH') runATHLogic();
                   }}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     activeTimeframe === tf
@@ -954,6 +1014,7 @@ export default function StockBubbles() {
                 setProgress(0);
                 if (tf === '1D') runOneDayLogic();
                 if (tf === '1H') runOneHourLogic();
+                if (tf === 'ATH') runATHLogic();
               }}
               className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${
                 activeTimeframe === tf
