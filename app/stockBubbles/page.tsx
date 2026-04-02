@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import BubbleCanvas from '../components/BubbleCanvas';
 import StockChart from '../components/StockChart';
 
@@ -132,158 +132,135 @@ export default function StockBubbles() {
   const [listHistoricalData, setListHistoricalData] = useState<Record<string, Record<string, number | null>>>({});
   const wsRef = useRef<WebSocket | null>(null);
 
-  useEffect(() => {
+  const fetchStockData = useCallback(async (isInitial = false) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
-
-    const fetchStockData = async (isInitial = false) => {
-      try {
-        if (!apiKey || !secretKey) {
-          if (isInitial) {
-            setError('API keys not configured. Please check environment variables.');
-            setLoading(false);
-          }
-          return;
-        }
-
-        const symbols = SP500_SYMBOLS.join(',');
-        const response = await fetch(`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols}`, {
-          headers: {
-            'APCA-API-KEY-ID': apiKey,
-            'APCA-API-SECRET-KEY': secretKey,
-          }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch market snapshots');
-
-        const snapshots = await response.json();
-        
-        const updatedStocks: Stock[] = SP500_SYMBOLS.map(symbol => {
-          const snapshot = snapshots[symbol];
-          const price = snapshot?.latestTrade?.p || 0;
-          const prevClose = snapshot?.prevDailyBar?.c || price;
-          const change = prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : 0;
-
-          return {
-            symbol,
-            name: SYMBOL_NAMES[symbol] || symbol,
-            price,
-            change,
-            prevClose,
-            marketCap: 1000000000000
-          };
-        });
-
-        setStocks(updatedStocks);
+    try {
+      if (!apiKey || !secretKey) {
         if (isInitial) {
+          setError('API keys not configured. Please check environment variables.');
           setLoading(false);
-          connectWebSocket();
         }
-      } catch (err) {
-        console.error('Error fetching initial snapshots:', err);
-        if (isInitial) {
-          setError('Failed to fetch market data.');
-          // Fallback initialization
-          setStocks(SP500_SYMBOLS.map(symbol => ({
-            symbol,
-            name: SYMBOL_NAMES[symbol] || symbol,
-            price: 0,
-            change: 0,
-            marketCap: 1000000000000
-          })));
-          setLoading(false);
-          connectWebSocket();
+        return;
+      }
+
+      const symbols = SP500_SYMBOLS.join(',');
+      const response = await fetch(`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols}`, {
+        headers: {
+          'APCA-API-KEY-ID': apiKey,
+          'APCA-API-SECRET-KEY': secretKey,
         }
-      }
-    };
+      });
 
-    const connectWebSocket = () => {
-      try {
-        const wsUrl = process.env.NEXT_PUBLIC_ALPACA_WS_URL || 'wss://stream.data.alpaca.markets/v2/iex';
-        wsRef.current = new WebSocket(wsUrl);
+      if (!response.ok) throw new Error('Failed to fetch market snapshots');
 
-        wsRef.current.onopen = () => {
-          console.log('Connected to Alpaca WebSocket');
-          wsRef.current?.send(JSON.stringify({
-            action: 'auth',
-            key: apiKey,
-            secret: secretKey
-          }));
+      const snapshots = await response.json();
+      
+      const updatedStocks: Stock[] = SP500_SYMBOLS.map(symbol => {
+        const snapshot = snapshots[symbol];
+        const price = snapshot?.latestTrade?.p || 0;
+        const prevClose = snapshot?.prevDailyBar?.c || price;
+        const change = prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : 0;
 
-          setTimeout(() => {
-            wsRef.current?.send(JSON.stringify({
-              action: 'subscribe',
-              trades: SP500_SYMBOLS,
-              dailyBars: SP500_SYMBOLS
-            }));
-          }, 1000);
+        return {
+          symbol,
+          name: SYMBOL_NAMES[symbol] || symbol,
+          price,
+          change,
+          prevClose,
+          marketCap: 1000000000000
         };
+      });
 
-        wsRef.current.onmessage = (event) => {
-          try {
-            const messages = JSON.parse(event.data);
-            if (!Array.isArray(messages)) return;
-            
-            setStocks(prevStocks => {
-              let hasUpdates = false;
-              const newStocks = [...prevStocks];
-
-              messages.forEach(msg => {
-                if (msg.S && (msg.T === 't' || msg.T === 'd')) {
-                  const idx = newStocks.findIndex(s => s.symbol === msg.S);
-                  if (idx !== -1) {
-                    const current = newStocks[idx];
-                    const newPrice = msg.T === 't' ? msg.p : msg.c;
-                    // Calculate change relative to prevClose if available, otherwise use daily open
-                    const baseline = current.prevClose || (msg.T === 'd' ? msg.o : newPrice);
-                    const newChange = baseline !== 0 ? ((newPrice - baseline) / baseline) * 100 : 0;
-
-                    newStocks[idx] = {
-                      ...current,
-                      price: newPrice,
-                      change: newChange
-                    };
-                    hasUpdates = true;
-                  }
-                }
-              });
-
-              return hasUpdates ? newStocks : prevStocks;
-            });
-          } catch (error) {
-            console.error('Error parsing WebSocket data:', error);
-          }
-        };
-
-        wsRef.current.onerror = (err) => console.error('WebSocket error:', err);
-        wsRef.current.onclose = () => console.log('WebSocket connection closed');
-      } catch (error) {
-        console.error('Error setting up WebSocket:', error);
+      setStocks(updatedStocks);
+      if (isInitial) {
+        setLoading(false);
       }
-    };
-
-    fetchStockData(true);
-
-    const pollInterval = setInterval(() => {
-      setProgress(0);
-      fetchStockData(false);
-    }, 15000);
-
-    const progressTimer = setInterval(() => {
-      setProgress(prev => (prev < 100 ? prev + (100 / 1500) : 0)); // 100% / (15000ms / 10ms) = 100 / 1500
-    }, 10); // Update every 10ms for smoother animation
-
-    // Cleanup
-    return () => {
-      clearInterval(pollInterval);
-      clearInterval(progressTimer);
-      if (wsRef.current) {
-        wsRef.current.close();
+    } catch (err) {
+      console.error('Error fetching initial snapshots:', err);
+      if (isInitial) {
+        setError('Failed to fetch market data.');
+        setStocks(SP500_SYMBOLS.map(symbol => ({
+          symbol,
+          name: SYMBOL_NAMES[symbol] || symbol,
+          price: 0,
+          change: 0,
+          marketCap: 1000000000000
+        })));
+        setLoading(false);
       }
-    };
+    }
   }, []);
 
-  const runOneDayLogic = async () => {
+  const connectWebSocket = useCallback(() => {
+    const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
+    const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
+    if (!apiKey || !secretKey) return;
+
+    try {
+      const wsUrl = process.env.NEXT_PUBLIC_ALPACA_WS_URL || 'wss://stream.data.alpaca.markets/v2/iex';
+      wsRef.current = new WebSocket(wsUrl);
+
+      wsRef.current.onopen = () => {
+        console.log('Connected to Alpaca WebSocket');
+        wsRef.current?.send(JSON.stringify({
+          action: 'auth',
+          key: apiKey,
+          secret: secretKey
+        }));
+
+        setTimeout(() => {
+          wsRef.current?.send(JSON.stringify({
+            action: 'subscribe',
+            trades: SP500_SYMBOLS,
+            dailyBars: SP500_SYMBOLS
+          }));
+        }, 1000);
+      };
+
+      wsRef.current.onmessage = (event) => {
+        try {
+          const messages = JSON.parse(event.data);
+          if (!Array.isArray(messages)) return;
+          
+          setStocks(prevStocks => {
+            let hasUpdates = false;
+            const newStocks = [...prevStocks];
+
+            messages.forEach(msg => {
+              if (msg.S && (msg.T === 't' || msg.T === 'd')) {
+                const idx = newStocks.findIndex(s => s.symbol === msg.S);
+                if (idx !== -1) {
+                  const current = newStocks[idx];
+                  const newPrice = msg.T === 't' ? msg.p : msg.c;
+                  const baseline = current.prevClose || (msg.T === 'd' ? msg.o : newPrice);
+                  const newChange = baseline !== 0 ? ((newPrice - baseline) / baseline) * 100 : 0;
+
+                  newStocks[idx] = {
+                    ...current,
+                    price: newPrice,
+                    change: newChange
+                  };
+                  hasUpdates = true;
+                }
+              }
+            });
+
+            return hasUpdates ? newStocks : prevStocks;
+          });
+        } catch (error) {
+          console.error('Error parsing WebSocket data:', error);
+        }
+      };
+
+      wsRef.current.onerror = (err) => console.error('WebSocket error:', err);
+      wsRef.current.onclose = () => console.log('WebSocket connection closed');
+    } catch (error) {
+      console.error('Error setting up WebSocket:', error);
+    }
+  }, []);
+
+  const runOneDayLogic = useCallback(async () => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     if (!apiKey || !secretKey) return;
@@ -338,9 +315,9 @@ export default function StockBubbles() {
         console.error(`Error in 1D logic for ${symbol}:`, err);
       }
     }
-  };
+  }, []);
 
-  const runOneHourLogic = async () => {
+  const runOneHourLogic = useCallback(async () => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     if (!apiKey || !secretKey) return;
@@ -395,7 +372,41 @@ export default function StockBubbles() {
         console.error(`Error in 1H logic for ${symbol}:`, err);
       }
     }
-  };
+  }, []);
+
+  // Handle persistent setup (initial load and WebSocket)
+  useEffect(() => {
+    fetchStockData(true);
+    connectWebSocket();
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, [fetchStockData, connectWebSocket]);
+
+  // Handle polling updates and progress bar, resets whenever activeTimeframe changes
+  useEffect(() => {
+    setProgress(0); // Trigger immediate refresh on timeframe change
+
+    const pollInterval = setInterval(() => {
+      setProgress(0);
+      if (activeTimeframe === '1H') {
+        runOneHourLogic();
+      } else if (activeTimeframe === '1D') {
+        runOneDayLogic();
+      } else {
+        fetchStockData(false);
+      }
+    }, 15000);
+
+    const progressTimer = setInterval(() => {
+      setProgress(prev => (prev < 100 ? prev + (100 / 1500) : 0));
+    }, 10);
+
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(progressTimer);
+    };
+  }, [activeTimeframe, runOneHourLogic, runOneDayLogic, fetchStockData]);
 
   // Fetch historical candle data when a stock is selected
   useEffect(() => {
@@ -629,6 +640,7 @@ export default function StockBubbles() {
                   key={tf}
                   onClick={() => {
                     setActiveTimeframe(tf);
+                    setProgress(0);
                     if (tf === '1D') runOneDayLogic();
                     if (tf === '1H') runOneHourLogic();
                   }}
@@ -939,6 +951,7 @@ export default function StockBubbles() {
               key={tf}
               onClick={() => {
                 setActiveTimeframe(tf);
+                setProgress(0);
                 if (tf === '1D') runOneDayLogic();
                 if (tf === '1H') runOneHourLogic();
               }}
