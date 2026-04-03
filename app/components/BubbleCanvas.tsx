@@ -389,7 +389,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
         // Border stroke
         ctx.strokeStyle = bubble.color;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
 
