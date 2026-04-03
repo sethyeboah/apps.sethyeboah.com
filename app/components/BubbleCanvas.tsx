@@ -128,12 +128,12 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
                 // Only resolve if bubbles are moving towards each other
                 if (velAlongNormal < 0) {
                   const restitution = 0.6; // Tune for bounciness
-                  
+
                   // If a bubble is being dragged, it acts as if it has infinite mass (invMass = 0)
                   const invM1 = b1.isDragging ? 0 : 1 / m1;
                   const invM2 = b2.isDragging ? 0 : 1 / m2;
                   const jScalar = -(1 + restitution) * velAlongNormal / (invM1 + invM2);
-                  
+
                   const impulseX = jScalar * nx;
                   const impulseY = jScalar * ny;
 
@@ -147,7 +147,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
                   }
                 }
               }
-              
+
               // Positional correction ratio based on mass
               // Larger objects move less during overlap resolution
               const totalMass = m1 + m2;
@@ -192,7 +192,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
         hasDragged = true;
         const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
         const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
-        
+
         // Calculate velocity based on change in position to impart momentum during collisions
         draggedBubble.vx = nextX - draggedBubble.x;
         draggedBubble.vy = nextY - draggedBubble.y;
@@ -237,7 +237,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
       const mouseY = touch.clientY - rect.top;
 
       mousePosRef.current = { x: mouseX, y: mouseY };
-      
+
       const dist = Math.sqrt(Math.pow(mouseX - touchStartX, 2) + Math.pow(mouseY - touchStartY, 2));
       if (dist > 7) {
         hasDragged = true;
@@ -245,7 +245,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
       const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
       const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
-      
+
       draggedBubble.vx = nextX - draggedBubble.x;
       draggedBubble.vy = nextY - draggedBubble.y;
       draggedBubble.x = nextX;
@@ -333,7 +333,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
         const isHovered = Math.sqrt(dx * dx + dy * dy) < bubble.radius;
 
         // Check if this bubble matches the search term
-        const isSearchHit = searchTermRef.current && 
+        const isSearchHit = searchTermRef.current &&
           bubble.stock.symbol.toLowerCase() === searchTermRef.current.trim().toLowerCase();
 
         // Draw hover highlight
@@ -354,7 +354,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
           const pulse = (Math.sin(Date.now() / 300) + 1) / 2; // Oscillates between 0 and 1
           const extraRadius = 3 + pulse * 5; // Radius expands between 3px and 8px
           const glowBlur = 15 + pulse * 15; // Glow blurs between 15px and 30px
-          
+
           ctx.beginPath();
           ctx.arc(bubble.x, bubble.y, bubble.radius + extraRadius, 0, Math.PI * 2);
           ctx.strokeStyle = '#ffffff';
@@ -366,11 +366,11 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
         }
 
         ctx.save();
-        
+
         // Main bubble body
         ctx.beginPath();
         ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
-        
+
         // Minimalist Radial Gradient focused on the edge
         const gradient = ctx.createRadialGradient(
           bubble.x,
@@ -380,10 +380,10 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
           bubble.y,
           bubble.radius
         );
-        
+
         gradient.addColorStop(0, 'rgba(0, 0, 0, 0)'); // Transparent center
         gradient.addColorStop(1, bubble.color);       // Colored edge
-        
+
         ctx.fillStyle = gradient;
         ctx.fill();
 
@@ -399,53 +399,53 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
         ctx.textBaseline = 'middle';
 
         // Define padding for text inside the bubble
-        const textHorizontalPadding = radius * 0.2; // 20% of radius as padding on each side
+        const textHorizontalPadding = radius * 0.15; // Slightly reduced padding for larger text
         const innerWidth = radius * 2 - 2 * textHorizontalPadding;
-        const textVerticalPadding = radius * 0.1; // 10% of radius as padding top/bottom
+        const textVerticalPadding = radius * 0.15; // Balanced vertical padding
         const innerHeight = radius * 2 - 2 * textVerticalPadding;
 
         // Helper to get text width for a given font size and style
         const getTextWidth = (text: string, fontSize: number, style: string) => {
-          ctx.font = `${style} ${fontSize}px Arial`;
+          ctx.font = `${style} ${fontSize}px Montserrat`;
           return ctx.measureText(text).width;
         };
 
         // Helper to get text height for a given font size and style
         const getTextHeight = (text: string, fontSize: number, style: string) => {
-          ctx.font = `${style} ${fontSize}px Arial`;
+          ctx.font = `${style} ${fontSize}px Montserrat`;
           const metrics = ctx.measureText(text);
           return metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
         };
 
         const symbolText = bubble.stock.symbol;
-        const valueText = displayModeRef.current === 'price' 
+        const valueText = displayModeRef.current === 'price'
           ? `$${bubble.stock.price.toFixed(2)}`
           : `${bubble.stock.change >= 0 ? '+' : ''}${bubble.stock.change.toFixed(2)}%`;
 
-        // Initial font size calculations with a target minimum of 16px
-        let symbolFontSize = Math.max(16, radius / 2.8); 
-        let valueFontSize = Math.max(9, radius / 5);   
+        // Initial font size calculations based on radius - reduced by 30%
+        let symbolFontSize = radius * 0.56; 
+        let valueFontSize = radius * 0.35;   
 
         // Iteratively reduce font sizes to fit horizontally within innerWidth
         // Prioritize symbol, then value
-        let currentSymbolWidth = getTextWidth(symbolText, symbolFontSize, 'bold');
+        let currentSymbolWidth = getTextWidth(symbolText, symbolFontSize, 'normal');
         while (currentSymbolWidth > innerWidth && symbolFontSize > 1) {
           symbolFontSize--;
-          currentSymbolWidth = getTextWidth(symbolText, symbolFontSize, 'bold');
+          currentSymbolWidth = getTextWidth(symbolText, symbolFontSize, 'normal');
         }
 
-        let currentValueWidth = getTextWidth(valueText, valueFontSize, 'bold');
+        let currentValueWidth = getTextWidth(valueText, valueFontSize, 'normal');
         while (currentValueWidth > innerWidth && valueFontSize > 1) {
           valueFontSize--;
-          currentValueWidth = getTextWidth(valueText, valueFontSize, 'bold');
+          currentValueWidth = getTextWidth(valueText, valueFontSize, 'normal');
         }
 
         // Calculate heights with potentially reduced font sizes
-        const symbolHeight = getTextHeight(symbolText, symbolFontSize, 'bold');
-        const valueHeight = getTextHeight(valueText, valueFontSize, 'bold');
+        const symbolHeight = getTextHeight(symbolText, symbolFontSize, 'normal');
+        const valueHeight = getTextHeight(valueText, valueFontSize, 'normal');
 
         // Total vertical space needed for text block, including small internal spacing
-        const lineSpacing = radius * 0.05; // Small spacing between lines
+        const lineSpacing = radius * 0.035; // Small spacing between lines
         let totalTextHeight = symbolHeight + valueHeight + lineSpacing;
 
         // If total text height exceeds innerHeight, scale down all font sizes proportionally
@@ -455,40 +455,40 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
           valueFontSize *= scaleRatio;
 
           // Recalculate heights with scaled font sizes for accurate positioning
-          totalTextHeight = getTextHeight(symbolText, symbolFontSize, 'bold') + 
-                            getTextHeight(valueText, valueFontSize, 'bold') + lineSpacing;
+          totalTextHeight = getTextHeight(symbolText, symbolFontSize, 'normal') +
+            getTextHeight(valueText, valueFontSize, 'normal') + lineSpacing;
         }
 
-        // Only draw if the bubble is large enough to show meaningful text (e.g., at least 16px font size for symbol, or a reasonable radius)
-        if (symbolFontSize >= 16 || radius > 25) { // Adjusted condition to prioritize readability
+        // Draw text if the bubble has enough space for two lines
+        if (radius > 12) {
           // Calculate starting Y for the top line to center the block
           const startY = bubble.y - totalTextHeight / 2;
 
           // Symbol (Top)
           ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${symbolFontSize}px Arial`;
+          ctx.font = `normal ${symbolFontSize}px Montserrat`;
           ctx.fillText(symbolText, bubble.x, startY + symbolHeight / 2);
-          
+
           // Value (Bottom)
           ctx.fillStyle = (displayModeRef.current === 'change') ? (bubble.stock.change >= 0 ? '#00ff00' : '#ff0000') : '#ffffff';
-          ctx.font = `bold ${valueFontSize}px Arial`;
+          ctx.font = `normal ${valueFontSize}px Montserrat`;
           ctx.fillText(valueText, bubble.x, startY + symbolHeight + lineSpacing + valueHeight / 2);
-        } else if (radius > 10) {
+        } else if (radius > 2) {
           // For smaller bubbles, show only the symbol centered
           // Re-calculate symbol font size for single line display, ensuring it fits horizontally and vertically
-          let singleSymbolFontSize = Math.max(16, radius / 2);
-          let currentSingleSymbolWidth = getTextWidth(symbolText, singleSymbolFontSize, 'bold');
+          let singleSymbolFontSize = radius * 1.05; // Start big and shrink to fit
+          let currentSingleSymbolWidth = getTextWidth(symbolText, singleSymbolFontSize, 'normal');
           while (currentSingleSymbolWidth > innerWidth && singleSymbolFontSize > 1) {
             singleSymbolFontSize--;
-            currentSingleSymbolWidth = getTextWidth(symbolText, singleSymbolFontSize, 'bold');
+            currentSingleSymbolWidth = getTextWidth(symbolText, singleSymbolFontSize, 'normal');
           }
-          let singleSymbolHeight = getTextHeight(symbolText, singleSymbolFontSize, 'bold');
+          let singleSymbolHeight = getTextHeight(symbolText, singleSymbolFontSize, 'normal');
           if (singleSymbolHeight > innerHeight && singleSymbolHeight > 0) {
             singleSymbolFontSize *= (innerHeight / singleSymbolHeight);
           }
-          
+
           ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${singleSymbolFontSize}px Arial`;
+          ctx.font = `normal ${singleSymbolFontSize}px Montserrat`;
           ctx.fillText(bubble.stock.symbol, bubble.x, bubble.y);
         }
       });
@@ -512,7 +512,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
           if (b.y - b.radius < 0) { b.y = b.radius; b.vy = Math.abs(b.vy) * 0.7; }
           else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; b.vy = -Math.abs(b.vy) * 0.7; }
-          
+
           // Ambient motion
           b.vx += (Math.random() - 0.5) * 0.05;
           b.vy += (Math.random() - 0.5) * 0.05;

@@ -689,7 +689,7 @@ export default function StockBubbles() {
           {/* Left side: Title and Timeframes */}
           <div className="flex items-center gap-4"> {/* Grouping title and timeframes */}
             {/* Title - Hidden on mobile when searching */}
-            <h1 className={`text-xl sm:text-2xl font-bold text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
+            <h1 className={`text-xl sm:text-2xl font-normal text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
               Alpha Bubbles
             </h1>
 
@@ -705,7 +705,7 @@ export default function StockBubbles() {
                     if (tf === '1H') runOneHourLogic();
                     if (tf === 'ATH') runATHLogic();
                   }}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-3 py-1 rounded-md text-xs font-normal transition-colors ${
                     activeTimeframe === tf
                       ? 'bg-gray-700 text-white' // Active state styling
                       : 'text-gray-400 hover:text-white hover:bg-gray-800' // Inactive state styling
@@ -720,7 +720,7 @@ export default function StockBubbles() {
             <div className="hidden md:flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
               <button
                 onClick={() => setDisplayMode('change')}
-                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
                   displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -728,7 +728,7 @@ export default function StockBubbles() {
               </button>
               <button
                 onClick={() => setDisplayMode('price')}
-                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
                   displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -792,7 +792,7 @@ export default function StockBubbles() {
           <div className="hidden md:flex flex-row items-center gap-3 w-auto">
             <button
               onClick={() => setIsListOpen(true)}
-              className="bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-6 font-bold hover:bg-gray-800 transition-colors"
+              className="bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-6 font-normal hover:bg-gray-800 transition-colors"
             >
               List
             </button>
@@ -826,7 +826,7 @@ export default function StockBubbles() {
           <div className="absolute inset-0 z-[60] bg-black/95 flex flex-col p-2 sm:p-6 md:p-10">
             <div className="flex justify-between items-center mb-4 sm:mb-8 border-b border-gray-800 pb-4">
               <div>
-                <h2 className="text-xl sm:text-3xl font-bold text-white tracking-tight">Market Overview</h2>
+                <h2 className="text-xl sm:text-3xl font-normal text-white tracking-tight">Market Overview</h2>
                 <p className="text-gray-500 text-sm mt-1">Closing prices for the most recent completed bars</p>
               </div>
               <button 
@@ -869,7 +869,7 @@ export default function StockBubbles() {
                   <button
                     key={f}
                     onClick={() => setListFilter(f)}
-                    className={`px-4 py-1.5 rounded-md text-[10px] font-black transition-all uppercase tracking-widest ${
+                    className={`px-4 py-1.5 rounded-md text-[10px] font-normal transition-all uppercase tracking-widest ${
                       listFilter === f 
                         ? 'bg-gray-800 text-white shadow-lg' 
                         : 'text-gray-500 hover:text-gray-300'
@@ -885,14 +885,14 @@ export default function StockBubbles() {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-900 sticky top-0 z-10 shadow-lg">
                   <tr>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 whitespace-nowrap">Company / Ticker</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">Price</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1H Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1D Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1W Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1M Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">3M Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1Y Close</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 whitespace-nowrap">Company / Ticker</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">Price</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1H Close</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1D Close</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1W Close</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1M Close</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">3M Close</th>
+                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1Y Close</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
@@ -905,28 +905,28 @@ export default function StockBubbles() {
                         setIsListOpen(false);
                       }}>
                         <td className="p-3 sm:p-4">
-                          <div className="text-white font-bold text-sm sm:text-base leading-tight">{currentStock?.name || symbol}</div>
+                          <div className="text-white font-normal text-sm sm:text-base leading-tight">{currentStock?.name || symbol}</div>
                           <div className="text-gray-500 text-xs sm:text-sm leading-tight">{symbol}</div>
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-white text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-white text-xs sm:text-sm text-right">
                           {currentStock ? `$${currentStock.price.toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1H'] ? `$${data['1H'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1D'] ? `$${data['1D'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1W'] ? `$${data['1W'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1M'] ? `$${data['1M'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['3M'] ? `$${data['3M'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 font-mono text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1Y'] ? `$${data['1Y'].toFixed(2)}` : '---'}
                         </td>
                       </tr>
@@ -935,12 +935,12 @@ export default function StockBubbles() {
                 </tbody>
               </table>
               {filteredListSymbols.length === 0 && !listLoading && (
-                <div className="p-12 text-center text-gray-600 font-bold tracking-widest uppercase text-sm">
+                <div className="p-12 text-center text-gray-600 font-normal tracking-widest uppercase text-sm">
                   No stocks match your search or filter
                 </div>
               )}
               {listLoading && (
-                <div className="p-8 text-center text-gray-500 animate-pulse font-bold tracking-widest">
+                <div className="p-8 text-center text-gray-500 animate-pulse font-normal tracking-widest">
                   FETCHING MARKET DATA...
                 </div>
               )}
@@ -969,10 +969,10 @@ export default function StockBubbles() {
               </button>
 
               <div className="mb-8">
-                <h3 className="text-2xl sm:text-3xl font-bold text-white tracking-tight leading-tight mb-1">
+                <h3 className="text-2xl sm:text-3xl font-normal text-white tracking-tight leading-tight mb-1">
                   {selectedStock.name}
                 </h3>
-                <p className="text-gray-500 text-base font-bold tracking-widest">{selectedStock.symbol}</p>
+                <p className="text-gray-500 text-base font-normal tracking-widest">{selectedStock.symbol}</p>
               </div>
               
               {/* Real-time Historical Chart */}
@@ -981,7 +981,7 @@ export default function StockBubbles() {
                   symbol={selectedStock.symbol} 
                   color={selectedStock.change >= 0 ? '#00ff00' : '#ff0000'} 
                 />
-                <span className="text-gray-600 text-[10px] font-bold uppercase tracking-widest text-center py-2 border-t border-gray-800 bg-black/20 relative z-10">
+                <span className="text-gray-600 text-[10px] font-normal uppercase tracking-widest text-center py-2 border-t border-gray-800 bg-black/20 relative z-10">
                   30-Day Price Trend
                 </span>
               </div>
@@ -991,8 +991,8 @@ export default function StockBubbles() {
                 <div className="grid grid-cols-3 gap-y-4 gap-x-2 border-b border-gray-800 pb-6">
                   {(['1H', '1D', '1W', '1M', '3M', '1Y'] as const).map((label) => (
                     <div key={label} className="flex flex-col">
-                      <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-0.5">{label} Close</span>
-                      <span className="text-sm font-mono text-white font-medium">
+                      <span className="text-gray-500 text-[10px] font-normal uppercase tracking-widest mb-0.5">{label} Close</span>
+                      <span className="text-sm text-white font-normal">
                         {typeof historicalPrices[label] === 'number' ? `$${historicalPrices[label]?.toFixed(2)}` : '---'}
                       </span>
                     </div>
@@ -1000,21 +1000,21 @@ export default function StockBubbles() {
                 </div>
 
                 <div className="flex flex-col border-b border-gray-800 pb-6">
-                  <span className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Current Price</span>
-                  <span className="text-5xl font-mono text-white font-bold leading-none">
+                  <span className="text-gray-500 text-xs font-normal uppercase tracking-widest mb-1">Current Price</span>
+                  <span className="text-5xl text-white font-normal leading-none">
                     ${selectedStock.price.toFixed(2)}
                   </span>
                 </div>
                 
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-500 text-xs font-bold uppercase tracking-widest">24h Change</span>
-                  <span className={`text-3xl font-bold ${selectedStock.change >= 0 ? 'text-[#00ff00]' : 'text-[#ff0000]'}`}>
+                  <span className="text-gray-500 text-xs font-normal uppercase tracking-widest">24h Change</span>
+                  <span className={`text-3xl font-normal ${selectedStock.change >= 0 ? 'text-[#00ff00]' : 'text-[#ff0000]'}`}>
                     {selectedStock.change >= 0 ? '+' : ''}{selectedStock.change.toFixed(2)}%
                   </span>
                 </div>
 
                 <div className="pt-4">
-                  <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em] text-center">
+                  <p className="text-gray-600 text-[10px] font-normal uppercase tracking-[0.2em] text-center">
                     Market Cap: ${(selectedStock.marketCap / 1000000000000).toFixed(2)}T
                   </p>
                 </div>
@@ -1037,7 +1037,7 @@ export default function StockBubbles() {
                 if (tf === '1H') runOneHourLogic();
                 if (tf === 'ATH') runATHLogic();
               }}
-              className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${
+              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-colors ${
                 activeTimeframe === tf
                   ? 'bg-gray-700 text-white shadow-sm'
                   : 'text-gray-500 hover:text-white hover:bg-gray-900'
@@ -1051,7 +1051,7 @@ export default function StockBubbles() {
           <div className="flex items-center bg-gray-900 rounded-lg p-0.5 border border-gray-800 ml-2">
             <button
               onClick={() => setDisplayMode('change')}
-              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+              className={`px-2 py-1 rounded-md text-[10px] font-normal transition-all ${
                 displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
@@ -1059,7 +1059,7 @@ export default function StockBubbles() {
             </button>
             <button
               onClick={() => setDisplayMode('price')}
-              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+              className={`px-2 py-1 rounded-md text-[10px] font-normal transition-all ${
                 displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
