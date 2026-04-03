@@ -126,6 +126,7 @@ export default function StockBubbles() {
   const [isListOpen, setIsListOpen] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
   const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
+  const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
   const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
@@ -714,6 +715,26 @@ export default function StockBubbles() {
                 </button>
               ))}
             </div>
+
+            {/* Display Mode Toggle (Desktop) */}
+            <div className="hidden md:flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
+              <button
+                onClick={() => setDisplayMode('change')}
+                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                  displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                %
+              </button>
+              <button
+                onClick={() => setDisplayMode('price')}
+                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                  displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                $
+              </button>
+            </div>
           </div>
 
           {/* Mobile Search View (Active) */}
@@ -798,7 +819,7 @@ export default function StockBubbles() {
 
       {/* Bubbles Container */}
       <div className="relative w-full flex-1 overflow-hidden">
-        <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} />
+        <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} displayMode={displayMode} />
 
         {/* Market List Modal */}
         {isListOpen && (
@@ -1025,6 +1046,26 @@ export default function StockBubbles() {
               {tf}
             </button>
           ))}
+
+          {/* Display Mode Toggle (Mobile) */}
+          <div className="flex items-center bg-gray-900 rounded-lg p-0.5 border border-gray-800 ml-2">
+            <button
+              onClick={() => setDisplayMode('change')}
+              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              %
+            </button>
+            <button
+              onClick={() => setDisplayMode('price')}
+              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              $
+            </button>
+          </div>
         </div>
       </div>
     </div>
