@@ -74,7 +74,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
     const bubbles: Bubble[] = stocks.map((stock, index) => {
       const existing = bubblesRef.current.find(b => b.stock.symbol === stock.symbol);
       const magnitude = Math.abs(stock.change);
-      const radius = (range > 0 ? 30 + ((magnitude - minAbs) / range) * 60 : 50) * Math.max(0.6, scaleFactor);
+      const radius = (range > 0 ? 30 + ((magnitude - minAbs) / range) * 60 : 50) * scaleFactor;
 
       if (existing) {
         existing.stock = stock;
@@ -107,7 +107,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
             const dx = b2.x - b1.x;
             const dy = b2.y - b1.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDistance = b1.radius + b2.radius + 2; // +2px padding
+            const minDistance = b1.radius + b2.radius + (2 * scaleFactor); // Proportional padding
 
             if (distance < minDistance) {
               const overlap = minDistance - (distance || 0.1);
@@ -389,7 +389,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
         // Border stroke
         ctx.strokeStyle = bubble.color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max(0.5, 1 * scaleFactor); // Sharp, scaled border
         ctx.stroke();
         ctx.restore();
 
