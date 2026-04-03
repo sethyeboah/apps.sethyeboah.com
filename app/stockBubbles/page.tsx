@@ -125,6 +125,7 @@ export default function StockBubbles() {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isListOpen, setIsListOpen] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
+  const [isTimeframeMenuOpen, setIsTimeframeMenuOpen] = useState(false);
   const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
   const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
   const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
@@ -684,12 +685,12 @@ export default function StockBubbles() {
   return (
     <div className="relative h-[100dvh] flex flex-col bg-black overflow-hidden">
       {/* Header Container */}
-      <div className="bg-black p-4 z-10 border-b border-gray-800 shrink-0"> {/* z-index remains 10 */}
-        <div className="flex items-center justify-between gap-4 px-2">
+      <div className="bg-black p-2 sm:p-4 z-10 border-b border-gray-800 shrink-0"> {/* Adjusted padding for smaller screens */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 px-1 sm:px-2">
           {/* Left side: Title and Timeframes */}
-          <div className="flex items-center gap-4"> {/* Grouping title and timeframes */}
+          <div className="flex items-center gap-2 sm:gap-4"> {/* Grouping title and timeframes */}
             {/* Title - Hidden on mobile when searching */}
-            <h1 className={`text-xl sm:text-2xl font-normal text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
+            <h1 className={`text-lg sm:text-2xl font-normal text-white whitespace-nowrap ${isSearchExpanded ? 'hidden md:block' : 'block'}`}>
               Alpha Bubbles
             </h1>
 
@@ -705,7 +706,7 @@ export default function StockBubbles() {
                     if (tf === '1H') runOneHourLogic();
                     if (tf === 'ATH') runATHLogic();
                   }}
-                  className={`px-3 py-1 rounded-md text-xs font-normal transition-colors ${
+                  className={`px-2 py-1 sm:px-3 rounded-md text-xs font-normal transition-colors ${
                     activeTimeframe === tf
                       ? 'bg-gray-700 text-white' // Active state styling
                       : 'text-gray-400 hover:text-white hover:bg-gray-800' // Inactive state styling
@@ -720,7 +721,7 @@ export default function StockBubbles() {
             <div className="hidden md:flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
               <button
                 onClick={() => setDisplayMode('change')}
-                className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
+                className={`px-2 py-1 sm:px-3 rounded-md text-[10px] font-normal transition-all ${
                   displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -728,7 +729,7 @@ export default function StockBubbles() {
               </button>
               <button
                 onClick={() => setDisplayMode('price')}
-                className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
+                className={`px-2 py-1 sm:px-3 rounded-md text-[10px] font-normal transition-all ${
                   displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -739,15 +740,15 @@ export default function StockBubbles() {
 
           {/* Mobile Search View (Active) */}
           {isSearchExpanded && (
-            <div className="flex items-center gap-3 w-full md:hidden">
+            <div className="flex items-center gap-2 w-full md:hidden">
               <button 
                 onClick={() => {
                   setIsSearchExpanded(false);
                   setSearchTerm('');
                 }}
-                className="p-2 text-gray-400 hover:text-white bg-gray-900 rounded-lg border border-gray-700"
+                className="p-1.5 text-gray-400 hover:text-white bg-gray-900 rounded-lg border border-gray-700"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
               </button>
@@ -758,7 +759,7 @@ export default function StockBubbles() {
                   placeholder="Search ticker..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:border-white/50 transition-colors"
+                  className="w-full bg-gray-900 text-white text-sm border border-gray-700 rounded-lg py-1.5 px-3 focus:outline-none focus:border-white/50 transition-colors"
                 />
               </div>
             </div>
@@ -766,22 +767,22 @@ export default function StockBubbles() {
 
           {/* Mobile Actions (Icons) - Hidden when searching */}
           {!isSearchExpanded && (
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="flex items-center gap-1.5 md:hidden">
               <button
                 onClick={() => setIsListOpen(true)}
-                className="p-2 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
+                className="p-1.5 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
                 aria-label="View Market List"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
               <button
                 onClick={() => setIsSearchExpanded(true)}
-                className="p-2 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
+                className="p-1.5 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
                 aria-label="Open Search"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
@@ -789,20 +790,20 @@ export default function StockBubbles() {
           )}
 
           {/* Desktop Controls - Always visible on larger screens */}
-          <div className="hidden md:flex flex-row items-center gap-3 w-auto">
+          <div className="hidden md:flex flex-row items-center gap-2 lg:gap-3 w-auto">
             <button
               onClick={() => setIsListOpen(true)}
-              className="bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-6 font-normal hover:bg-gray-800 transition-colors"
+              className="bg-gray-900 text-white border border-gray-700 rounded-lg py-1.5 px-4 sm:py-2 sm:px-6 text-sm sm:text-base font-normal hover:bg-gray-800 transition-colors"
             >
               List
             </button>
-            <div className="relative w-64">
+            <div className="relative w-48 lg:w-64">
               <input
                 type="text"
-                placeholder="Search ticker (e.g. AAPL)..."
+                placeholder="Search ticker..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:border-white/50 transition-colors"
+                className="w-full bg-gray-900 text-white text-sm sm:text-base border border-gray-700 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 focus:outline-none focus:border-white/50 transition-colors"
               />
             </div>
           </div>
@@ -1025,33 +1026,50 @@ export default function StockBubbles() {
       </div>
 
       {/* Mobile Footer with Timeframes */}
-      <div className="md:hidden bg-black p-2 z-10 border-t border-gray-800 shrink-0 overflow-x-auto">
-        <div className="flex items-center justify-center gap-1 min-w-max px-2">
-          {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
+      <div className="md:hidden bg-black p-2 z-20 border-t border-gray-800 shrink-0">
+        <div className="flex items-center justify-between px-4">
+          <div className="relative">
             <button
-              key={tf}
-              onClick={() => {
-                setActiveTimeframe(tf);
-                setProgress(0);
-                if (tf === '1D') runOneDayLogic();
-                if (tf === '1H') runOneHourLogic();
-                if (tf === 'ATH') runATHLogic();
-              }}
-              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-colors ${
-                activeTimeframe === tf
-                  ? 'bg-gray-700 text-white shadow-sm'
-                  : 'text-gray-500 hover:text-white hover:bg-gray-900'
-              }`}
+              onClick={() => setIsTimeframeMenuOpen(!isTimeframeMenuOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-[10px] font-normal uppercase tracking-widest rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors"
             >
-              {tf}
+              <span>TF: {activeTimeframe}</span>
+              <svg className={`w-3 h-3 transition-transform duration-200 ${isTimeframeMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
-          ))}
+
+            {isTimeframeMenuOpen && (
+              <div className="absolute bottom-full left-0 mb-2 w-32 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-30">
+                {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => {
+                      setActiveTimeframe(tf);
+                      setProgress(0);
+                      setIsTimeframeMenuOpen(false);
+                      if (tf === '1D') runOneDayLogic();
+                      if (tf === '1H') runOneHourLogic();
+                      if (tf === 'ATH') runATHLogic();
+                    }}
+                    className={`w-full text-left px-4 py-2 text-[10px] font-normal uppercase tracking-widest transition-colors ${
+                      activeTimeframe === tf 
+                        ? 'bg-gray-700 text-white' 
+                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Display Mode Toggle (Mobile) */}
-          <div className="flex items-center bg-gray-900 rounded-lg p-0.5 border border-gray-800 ml-2">
+          <div className="flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
             <button
-              onClick={() => setDisplayMode('change')}
-              className={`px-2 py-1 rounded-md text-[10px] font-normal transition-all ${
+              onClick={() => { setDisplayMode('change'); setIsTimeframeMenuOpen(false); }}
+              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
                 displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
@@ -1059,7 +1077,7 @@ export default function StockBubbles() {
             </button>
             <button
               onClick={() => setDisplayMode('price')}
-              className={`px-2 py-1 rounded-md text-[10px] font-normal transition-all ${
+              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
                 displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
