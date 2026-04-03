@@ -470,7 +470,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
           ctx.fillText(symbolText, bubble.x, startY + symbolHeight / 2);
 
           // Value (Bottom)
-          ctx.fillStyle = (displayModeRef.current === 'change') ? (bubble.stock.change >= 0 ? '#00ff00' : '#ff0000') : '#ffffff';
+          ctx.fillStyle = '#ffffff';
           ctx.font = `normal ${valueFontSize}px Montserrat`;
           ctx.fillText(valueText, bubble.x, startY + symbolHeight + lineSpacing + valueHeight / 2);
         } else if (radius > 2) {
