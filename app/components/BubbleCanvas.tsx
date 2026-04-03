@@ -51,12 +51,18 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    let logicalWidth = 0;
+    let logicalHeight = 0;
+
     const resizeCanvas = () => {
-      // Get parent container height
       const container = canvas.parentElement;
       if (container) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
+        const dpr = window.devicePixelRatio || 1;
+        logicalWidth = container.clientWidth;
+        logicalHeight = container.clientHeight;
+        canvas.width = logicalWidth * dpr;
+        canvas.height = logicalHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
     };
     resizeCanvas();
@@ -68,7 +74,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
     const range = maxAbs - minAbs;
 
     // Calculate a scale factor based on the smaller dimension of the canvas
-    const scaleFactor = Math.min(canvas.width, canvas.height) / 800;
+    const scaleFactor = Math.min(logicalWidth, logicalHeight) / 800;
 
     // Sync persistent bubbles with new stock data to prevent jumping on updates
     const bubbles: Bubble[] = stocks.map((stock, index) => {
@@ -82,8 +88,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
         existing.color = stock.change >= 0 ? '#00ff00' : '#ff0000';
         return existing;
       } else {
-        const safeWidth = Math.max(0, canvas.width - 2 * radius);
-        const safeHeight = Math.max(0, canvas.height - 2 * radius);
+        const safeWidth = Math.max(0, logicalWidth - 2 * radius);
+        const safeHeight = Math.max(0, logicalHeight - 2 * radius);
         return {
           x: radius + Math.random() * safeWidth,
           y: radius + Math.random() * safeHeight,
@@ -167,8 +173,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
       }
       // Ensure all bubbles stay within the container after being pushed
       bubbles.forEach(b => {
-        b.x = Math.max(b.radius, Math.min(canvas.width - b.radius, b.x));
-        b.y = Math.max(b.radius, Math.min(canvas.height - b.radius, b.y));
+        b.x = Math.max(b.radius, Math.min(logicalWidth - b.radius, b.x));
+        b.y = Math.max(b.radius, Math.min(logicalHeight - b.radius, b.y));
       });
     };
 
@@ -190,8 +196,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
       if (draggedBubble) {
         hasDragged = true;
-        const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
-        const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
+        const nextX = Math.max(draggedBubble.radius, Math.min(logicalWidth - draggedBubble.radius, mouseX - dragOffsetX));
+        const nextY = Math.max(draggedBubble.radius, Math.min(logicalHeight - draggedBubble.radius, mouseY - dragOffsetY));
 
         // Calculate velocity based on change in position to impart momentum during collisions
         draggedBubble.vx = nextX - draggedBubble.x;
@@ -243,8 +249,8 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
         hasDragged = true;
       }
 
-      const nextX = Math.max(draggedBubble.radius, Math.min(canvas.width - draggedBubble.radius, mouseX - dragOffsetX));
-      const nextY = Math.max(draggedBubble.radius, Math.min(canvas.height - draggedBubble.radius, mouseY - dragOffsetY));
+      const nextX = Math.max(draggedBubble.radius, Math.min(logicalWidth - draggedBubble.radius, mouseX - dragOffsetX));
+      const nextY = Math.max(draggedBubble.radius, Math.min(logicalHeight - draggedBubble.radius, mouseY - dragOffsetY));
 
       draggedBubble.vx = nextX - draggedBubble.x;
       draggedBubble.vy = nextY - draggedBubble.y;
@@ -324,7 +330,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
     // Draw static bubbles (no animation loop)
     const drawBubbles = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
       bubbles.forEach(bubble => {
         // Calculate if mouse is hovering over this bubble
@@ -389,7 +395,7 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
         // Border stroke
         ctx.strokeStyle = bubble.color;
-        ctx.lineWidth = Math.max(0.5, 1 * scaleFactor); // Sharp, scaled border
+        ctx.lineWidth = Math.max(1, 1.5 * scaleFactor); // Sharp, scaled border
         ctx.stroke();
         ctx.restore();
 
@@ -508,10 +514,10 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
           // Bounce off walls
           if (b.x - b.radius < 0) { b.x = b.radius; b.vx = Math.abs(b.vx) * 0.7; }
-          else if (b.x + b.radius > canvas.width) { b.x = canvas.width - b.radius; b.vx = -Math.abs(b.vx) * 0.7; }
+          else if (b.x + b.radius > logicalWidth) { b.x = logicalWidth - b.radius; b.vx = -Math.abs(b.vx) * 0.7; }
 
           if (b.y - b.radius < 0) { b.y = b.radius; b.vy = Math.abs(b.vy) * 0.7; }
-          else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; b.vy = -Math.abs(b.vy) * 0.7; }
+          else if (b.y + b.radius > logicalHeight) { b.y = logicalHeight - b.radius; b.vy = -Math.abs(b.vy) * 0.7; }
 
           // Ambient motion
           b.vx += (Math.random() - 0.5) * 0.05;
