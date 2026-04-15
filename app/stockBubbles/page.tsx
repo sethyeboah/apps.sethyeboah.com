@@ -139,7 +139,9 @@ const SYMBOL_NAMES: Record<string, string> = {
   'QQQ': 'Invesco QQQ Trust',
   'VOO': 'Vanguard S&P 500 ETF',
   'FN': 'Fabrinet',
-  'MRVL': 'Marvell Technology, Inc.'
+  'MRVL': 'Marvell Technology, Inc.',
+  'MU': 'Micron Technology, Inc.',
+  'SNDK': 'SanDisk Corporation'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
