@@ -141,7 +141,11 @@ const SYMBOL_NAMES: Record<string, string> = {
   'FN': 'Fabrinet',
   'MRVL': 'Marvell Technology, Inc.',
   'MU': 'Micron Technology, Inc.',
-  'SNDK': 'SanDisk Corporation'
+  'SNDK': 'SanDisk Corporation',
+  'RKLB': 'Rocket Lab USA, Inc.',
+  'PL': 'Planet Labs PBC',
+  'LUNR': 'Intuitive Machines, Inc.',
+  'RDW': 'Redwire Corporation'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
