@@ -211,21 +211,15 @@ export default function StockBubbles() {
       });
 
       setStocks(updatedStocks);
+      setError(null);
       if (isInitial) {
         setLoading(false);
       }
     } catch (err) {
-      console.error('Error fetching initial snapshots:', err);
+      console.error('Error fetching market snapshots:', err);
       if (isInitial) {
-        setError('Failed to fetch market data.');
-        setStocks(SP500_SYMBOLS.map(symbol => ({
-          symbol,
-          name: SYMBOL_NAMES[symbol] || symbol,
-          price: 0,
-          change: 0,
-          marketCap: 1000000000000
-        })));
-        setLoading(false);
+        // Automatically retry after 2 seconds if initial fetch fails
+        setTimeout(() => fetchStockData(true), 2000);
       }
     }
   }, []);
@@ -701,8 +695,11 @@ export default function StockBubbles() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-2xl">Loading Alpha Bubbles...</div>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+        <div className="text-white text-2xl font-light tracking-widest uppercase">Loading app</div>
+        <div className="w-64 h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-full bg-[#00ff00] shadow-[0_0_15px_#00ff00] animate-pulse" style={{ width: '45%' }} />
+        </div>
       </div>
     );
   }
