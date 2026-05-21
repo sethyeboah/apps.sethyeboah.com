@@ -145,7 +145,12 @@ const SYMBOL_NAMES: Record<string, string> = {
   'RKLB': 'Rocket Lab USA, Inc.',
   'PL': 'Planet Labs PBC',
   'LUNR': 'Intuitive Machines, Inc.',
-  'RDW': 'Redwire Corporation'
+  'RDW': 'Redwire Corporation',
+  'NOW': 'ServiceNow, Inc.',
+  'NBIS': 'Nebius Group N.V.',
+  'CBRS': 'Cerebras Systems',
+  'GLW': 'Corning Incorporated',
+  'IREN': 'IREN Ltd'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
