@@ -150,7 +150,9 @@ const SYMBOL_NAMES: Record<string, string> = {
   'NBIS': 'Nebius Group N.V.',
   'CBRS': 'Cerebras Systems',
   'GLW': 'Corning Incorporated',
-  'IREN': 'IREN Ltd'
+  'IREN': 'IREN Ltd',
+  'GFS': 'GlobalFoundries Inc.',
+  'INFQ': 'Infleqtion'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
