@@ -152,8 +152,11 @@ const SYMBOL_NAMES: Record<string, string> = {
   'GLW': 'Corning Incorporated',
   'IREN': 'IREN Ltd',
   'GFS': 'GlobalFoundries Inc.',
-  'INFQ': 'Infleqtion',
-  'NOK': 'Nokia'
+  'INFQ': 'Infleqtion', // Assuming this is a placeholder or specific to your context
+  'NOK': 'Nokia',
+  'SATS': 'EchoStar Corporation',
+  'BKSY': 'BlackSky Technology Inc.',
+  'FLY': 'Firefly Aerospace'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
