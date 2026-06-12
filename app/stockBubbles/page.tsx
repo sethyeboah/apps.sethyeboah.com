@@ -156,7 +156,8 @@ const SYMBOL_NAMES: Record<string, string> = {
   'NOK': 'Nokia',
   'SATS': 'EchoStar Corporation',
   'BKSY': 'BlackSky Technology Inc.',
-  'FLY': 'Firefly Aerospace'
+  'FLY': 'Firefly Aerospace',
+  'SPCX': 'SpaceX'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
@@ -170,16 +171,21 @@ export default function StockBubbles() {
   const [progress, setProgress] = useState(0);
   const lastMatchedTermRef = useRef('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [isListOpen, setIsListOpen] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'bubbles' | 'table' | 'bars'>('bubbles');
   const [isTimeframeMenuOpen, setIsTimeframeMenuOpen] = useState(false);
   const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
   const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
   const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
+  const activeTimeframeRef = useRef(activeTimeframe);
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
   const [listHistoricalData, setListHistoricalData] = useState<Record<string, Record<string, number | null>>>({});
   const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    activeTimeframeRef.current = activeTimeframe;
+  }, [activeTimeframe]);
 
   const fetchStockData = useCallback(async (isInitial = false) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
@@ -276,8 +282,17 @@ export default function StockBubbles() {
                 if (idx !== -1) {
                   const current = newStocks[idx];
                   const newPrice = msg.T === 't' ? msg.p : msg.c;
-                  const baseline = current.prevClose || (msg.T === 'd' ? msg.o : newPrice);
-                  const newChange = baseline !== 0 ? ((newPrice - baseline) / baseline) * 100 : 0;
+                  
+                  let newChange = current.change;
+                  if (activeTimeframeRef.current === 'ATH') {
+                    // For ATH, current.price stores the ATH value
+                    const currentATH = Math.max(current.price, newPrice);
+                    newChange = newPrice !== 0 ? ((currentATH - newPrice) / newPrice) * 100 : 0;
+                  } else {
+                    // Use timeframe-aware baseline
+                    const baseline = current.prevClose || (msg.T === 'd' ? msg.o : newPrice);
+                    newChange = baseline !== 0 ? ((newPrice - baseline) / baseline) * 100 : 0;
+                  }
 
                   newStocks[idx] = {
                     ...current,
@@ -350,7 +365,7 @@ export default function StockBubbles() {
 
           setStocks(prev => prev.map(s => 
             s.symbol === symbol 
-              ? { ...s, price: lastButOneClosingPrice, change: percentageChangeFromLastToCurrent } 
+              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice } 
               : s
           ));
         }
@@ -407,7 +422,7 @@ export default function StockBubbles() {
 
           setStocks(prev => prev.map(s => 
             s.symbol === symbol 
-              ? { ...s, price: athPrice, change: percentageChangeToATH } 
+              ? { ...s, price: currentPrice, change: percentageChangeToATH, prevClose: athPrice } 
               : s
           ));
         }
@@ -464,7 +479,7 @@ export default function StockBubbles() {
 
           setStocks(prev => prev.map(s => 
             s.symbol === symbol 
-              ? { ...s, price: lastButOneClosingPrice, change: percentageChangeFromLastToCurrent } 
+              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice } 
               : s
           ));
         }
@@ -608,7 +623,7 @@ export default function StockBubbles() {
 
   // Fetch market-wide list data when the List modal is opened
   useEffect(() => {
-    if (!isListOpen) return;
+    if (viewMode !== 'table') return;
 
     const fetchAllHistorical = async () => {
       setListLoading(true);
@@ -681,12 +696,19 @@ export default function StockBubbles() {
     };
 
     fetchAllHistorical();
-  }, [isListOpen]);
+  }, [viewMode]);
+
+  // Fast lookup for stocks by symbol
+  const stocksMap = useMemo(() => {
+    const map = new Map<string, Stock>();
+    stocks.forEach(s => map.set(s.symbol, s));
+    return map;
+  }, [stocks]);
 
   // Filter and Search logic for the market list
   const filteredListSymbols = useMemo(() => {
     return SP500_SYMBOLS.filter(symbol => {
-      const stock = stocks.find(s => s.symbol === symbol);
+      const stock = stocksMap.get(symbol);
       const name = SYMBOL_NAMES[symbol] || '';
       const query = listSearchQuery.toLowerCase();
       
@@ -697,7 +719,15 @@ export default function StockBubbles() {
       if (listFilter === 'losers') return (stock?.change || 0) < 0;
       return true;
     });
-  }, [listSearchQuery, listFilter, stocks]);
+  }, [listSearchQuery, listFilter, stocksMap]);
+
+  // Derive ranked stocks for the bars view
+  const rankedStocks = useMemo(() => {
+    return filteredListSymbols
+      .map(symbol => stocksMap.get(symbol))
+      .filter((s): s is Stock => !!s)
+      .sort((a, b) => b.change - a.change);
+  }, [filteredListSymbols, stocksMap]);
 
   // Determine overall market sentiment for progress bar color
   const totalChange = stocks.reduce((sum, stock) => sum + stock.change, 0);
@@ -812,15 +842,45 @@ export default function StockBubbles() {
           {/* Mobile Actions (Icons) - Hidden when searching */}
           {!isSearchExpanded && (
             <div className="flex items-center gap-1.5 md:hidden">
-              <button
-                onClick={() => setIsListOpen(true)}
-                className="p-1.5 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
-                aria-label="View Market List"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
+              {/* View Mode Toggle (Mobile) */}
+              <div className="flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
+                <button
+                  onClick={() => setViewMode('bubbles')}
+                  className={`p-1.5 rounded-md transition-all ${
+                    viewMode === 'bubbles' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                  title="Bubbles View"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3" />
+                    <circle cx="6" cy="7" r="2" />
+                    <circle cx="18" cy="8" r="2" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-md transition-all ${
+                    viewMode === 'table' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                  title="Table View"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h18v18H3V3zm0 6h18M3 15h18M9 3v18M15 3v18" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setViewMode('bars')}
+                  className={`p-1.5 rounded-md transition-all ${
+                    viewMode === 'bars' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                  title="Bars View"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h14" />
+                  </svg>
+                </button>
+              </div>
+
               <button
                 onClick={() => setIsSearchExpanded(true)}
                 className="p-1.5 bg-gray-900 text-white border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors"
@@ -835,12 +895,45 @@ export default function StockBubbles() {
 
           {/* Desktop Controls - Always visible on larger screens */}
           <div className="hidden md:flex flex-row items-center gap-2 lg:gap-3 w-auto">
-            <button
-              onClick={() => setIsListOpen(true)}
-              className="bg-gray-900 text-white border border-gray-700 rounded-lg py-1.5 px-4 sm:py-2 sm:px-6 text-sm sm:text-base font-normal hover:bg-gray-800 transition-colors"
-            >
-              List
-            </button>
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
+              <button
+                onClick={() => setViewMode('bubbles')}
+                className={`p-1.5 rounded-md transition-all ${
+                  viewMode === 'bubbles' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
+                title="Bubbles View"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="6" cy="7" r="2" />
+                  <circle cx="18" cy="8" r="2" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md transition-all ${
+                  viewMode === 'table' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
+                title="Table View"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h18v18H3V3zm0 6h18M3 15h18M9 3v18M15 3v18" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setViewMode('bars')}
+                className={`p-1.5 rounded-md transition-all ${
+                  viewMode === 'bars' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
+                title="Bars View"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h14" />
+                </svg>
+              </button>
+            </div>
+
             <div className="relative w-48 lg:w-64">
               <input
                 type="text"
@@ -864,24 +957,16 @@ export default function StockBubbles() {
 
       {/* Bubbles Container */}
       <div className="relative w-full flex-1 overflow-hidden">
-        <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} displayMode={displayMode} />
-
-        {/* Market List Modal */}
-        {isListOpen && (
-          <div className="absolute inset-0 z-[60] bg-black/95 flex flex-col p-2 sm:p-6 md:p-10">
+        {viewMode === 'bubbles' && (
+          <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} displayMode={displayMode} />
+        )}
+        {viewMode === 'table' && (
+          <div className="absolute inset-0 z-10 bg-black flex flex-col p-2 sm:p-6 md:p-10">
             <div className="flex justify-between items-center mb-4 sm:mb-8 border-b border-gray-800 pb-4">
               <div>
                 <h2 className="text-xl sm:text-3xl font-normal text-white tracking-tight">Market Overview</h2>
                 <p className="text-gray-500 text-sm mt-1">Closing prices for the most recent completed bars</p>
               </div>
-              <button 
-                onClick={() => setIsListOpen(false)}
-                className="p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors bg-gray-900 rounded-full"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
 
             {/* Search and Filter Controls */}
@@ -926,18 +1011,18 @@ export default function StockBubbles() {
               </div>
             </div>
 
-            <div className="flex-grow overflow-x-auto overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/20">
+            <div className="flex-grow overflow-x-auto overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/10">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-900 sticky top-0 z-10 shadow-lg">
                   <tr>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 whitespace-nowrap">Company / Ticker</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">Price</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1H Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1D Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1W Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1M Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">3M Close</th>
-                    <th className="p-3 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1Y Close</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 whitespace-nowrap">Company / Ticker</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">Price</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1H Close</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1D Close</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1W Close</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1M Close</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">3M Close</th>
+                    <th className="p-2 sm:p-4 text-gray-400 text-[9px] sm:text-[10px] font-normal uppercase tracking-widest border-b border-gray-800 text-right whitespace-nowrap">1Y Close</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
@@ -947,31 +1032,30 @@ export default function StockBubbles() {
                     return (
                       <tr key={symbol} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => {
                         setSelectedStock(stocks.find(s => s.symbol === symbol) || null);
-                        setIsListOpen(false);
                       }}>
-                        <td className="p-3 sm:p-4">
+                        <td className="p-2 sm:p-4">
                           <div className="text-white font-normal text-sm sm:text-base leading-tight">{currentStock?.name || symbol}</div>
                           <div className="text-gray-500 text-xs sm:text-sm leading-tight">{symbol}</div>
                         </td>
-                        <td className="p-3 sm:p-4 text-white text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-white text-xs sm:text-sm text-right">
                           {currentStock ? `$${currentStock.price.toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1H'] ? `$${data['1H'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1D'] ? `$${data['1D'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1W'] ? `$${data['1W'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1M'] ? `$${data['1M'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['3M'] ? `$${data['3M'].toFixed(2)}` : '---'}
                         </td>
-                        <td className="p-3 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
+                        <td className="p-2 sm:p-4 text-gray-400 text-xs sm:text-sm text-right">
                           {data['1Y'] ? `$${data['1Y'].toFixed(2)}` : '---'}
                         </td>
                       </tr>
@@ -992,6 +1076,95 @@ export default function StockBubbles() {
             </div>
           </div>
         )}
+
+        {viewMode === 'bars' && (
+          <div className="absolute inset-0 z-10 bg-black flex flex-col p-2 sm:p-6 md:p-10">
+            <div className="flex justify-between items-center mb-4 sm:mb-8 border-b border-gray-800 pb-4">
+              <div>
+                <h2 className="text-xl sm:text-3xl font-normal text-white tracking-tight">Performance Rankings</h2>
+                <p className="text-gray-500 text-sm mt-1">Relative performance for the {activeTimeframe} period</p>
+              </div>
+            </div>
+
+            {/* Search and Filter Controls */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 mb-6">
+              <div className="relative flex-grow max-w-md">
+                <input
+                  type="text"
+                  placeholder="Filter by ticker or name..."
+                  value={listSearchQuery}
+                  onChange={(e) => setListSearchQuery(e.target.value)}
+                  className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2.5 pl-10 pr-4 focus:outline-none focus:border-white/50 transition-colors"
+                />
+                <svg className="w-5 h-5 text-gray-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              
+              <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-800 self-start md:self-auto">
+                {(['all', 'gainers', 'losers'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setListFilter(f)}
+                    className={`px-4 py-1.5 rounded-md text-[10px] font-normal transition-all uppercase tracking-widest ${
+                      listFilter === f 
+                        ? 'bg-gray-800 text-white shadow-lg' 
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-grow overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/10 p-2 sm:p-4">
+              {(() => {
+                // Scale relative to global performance for consistency
+                const maxAbsChange = Math.max(...stocks.map(s => Math.abs(s.change)), 0.1);
+
+                return rankedStocks.map(stock => {
+                  const isPositive = stock.change >= 0;
+                  const barWidth = (Math.abs(stock.change) / maxAbsChange) * 50;
+
+                  return (
+                    <div 
+                      key={stock.symbol} 
+                      className="flex items-center gap-3 py-2 px-2 hover:bg-white/5 rounded transition-colors cursor-pointer group"
+                      onClick={() => setSelectedStock(stock)}
+                    >
+                      <div className="w-12 sm:w-16 shrink-0">
+                        <span className="text-white text-xs sm:text-sm font-medium">{stock.symbol}</span>
+                      </div>
+                      
+                      <div className="flex-1 relative h-6 sm:h-8 flex items-center">
+                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-800 z-10" />
+                        <div className="absolute inset-0 bg-gray-900/20 rounded-sm" />
+                        <div 
+                          className={`h-4 sm:h-5 absolute top-1/2 -translate-y-1/2 transition-all duration-500 ${isPositive ? 'left-1/2 bg-[#00ff00]/60 group-hover:bg-[#00ff00]' : 'right-1/2 bg-[#ff0000]/60 group-hover:bg-[#ff0000]'} rounded-sm`}
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
+
+                      <div className={`w-16 sm:w-20 text-right text-[10px] sm:text-xs font-mono ${isPositive ? 'text-[#00ff00]' : 'text-[#ff0000]'}`}>
+                        {isPositive ? '+' : ''}{stock.change.toFixed(2)}%
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+              
+              {filteredListSymbols.length === 0 && (
+                <div className="h-full flex items-center justify-center text-gray-600 font-normal tracking-widest uppercase text-sm">
+                  No performance data matches search
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Market List Modal */}
+        {/* Removed redundant Market List Modal as it is now integrated into the table viewMode */}
 
         {/* Stock Details Modal Overlay */}
         {selectedStock && (
