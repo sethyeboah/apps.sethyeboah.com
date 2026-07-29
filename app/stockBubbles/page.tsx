@@ -210,7 +210,7 @@ export default function StockBubbles() {
       if (!response.ok) throw new Error('Failed to fetch market snapshots');
 
       const snapshots = await response.json();
-      
+
       const updatedStocks: Stock[] = SP500_SYMBOLS.map(symbol => {
         const snapshot = snapshots[symbol];
         const price = snapshot?.latestTrade?.p || 0;
@@ -271,7 +271,7 @@ export default function StockBubbles() {
         try {
           const messages = JSON.parse(event.data);
           if (!Array.isArray(messages)) return;
-          
+
           setStocks(prevStocks => {
             let hasUpdates = false;
             const newStocks = [...prevStocks];
@@ -282,7 +282,7 @@ export default function StockBubbles() {
                 if (idx !== -1) {
                   const current = newStocks[idx];
                   const newPrice = msg.T === 't' ? msg.p : msg.c;
-                  
+
                   let newChange = current.change;
                   if (activeTimeframeRef.current === 'ATH') {
                     // For ATH, current.price stores the ATH value
@@ -363,9 +363,9 @@ export default function StockBubbles() {
 
           console.log('oneDayStockPricesAndPercentages:', oneDayStockPricesAndPercentages);
 
-          setStocks(prev => prev.map(s => 
-            s.symbol === symbol 
-              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice } 
+          setStocks(prev => prev.map(s =>
+            s.symbol === symbol
+              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice }
               : s
           ));
         }
@@ -420,9 +420,9 @@ export default function StockBubbles() {
 
           console.log('athStockPricesAndPercentages:', athStockPricesAndPercentages);
 
-          setStocks(prev => prev.map(s => 
-            s.symbol === symbol 
-              ? { ...s, price: currentPrice, change: percentageChangeToATH, prevClose: athPrice } 
+          setStocks(prev => prev.map(s =>
+            s.symbol === symbol
+              ? { ...s, price: currentPrice, change: percentageChangeToATH, prevClose: athPrice }
               : s
           ));
         }
@@ -477,9 +477,9 @@ export default function StockBubbles() {
 
           console.log('oneHourStockPricesAndPercentages:', oneHourStockPricesAndPercentages);
 
-          setStocks(prev => prev.map(s => 
-            s.symbol === symbol 
-              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice } 
+          setStocks(prev => prev.map(s =>
+            s.symbol === symbol
+              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice }
               : s
           ));
         }
@@ -578,8 +578,8 @@ export default function StockBubbles() {
             const data = await response.json();
             const symbol = selectedStock.symbol;
             const bars = data.bars?.[symbol];
-            
-            const estHour = parseInt(new Date().toLocaleString("en-US", {timeZone: "America/New_York", hour12: false, hour: 'numeric'}));
+
+            const estHour = parseInt(new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour12: false, hour: 'numeric' }));
             const pastMarketClose = estHour >= 16;
 
             if ((label === '1H' || label === '1D') && pastMarketClose) {
@@ -610,7 +610,7 @@ export default function StockBubbles() {
   useEffect(() => {
     const term = searchTerm.trim().toUpperCase();
     const match = stocks.find(s => s.symbol === term);
-    
+
     if (match) {
       if (term !== lastMatchedTermRef.current) {
         setSelectedStock(match);
@@ -645,7 +645,7 @@ export default function StockBubbles() {
         else d.setFullYear(d.getFullYear() - 3); // 36 months
         return d.toISOString();
       };
-      
+
       const timeframes = [
         { label: '1H', tf: '1H', start: getStartTime('1H') },
         { label: '1D', tf: '1D', start: getStartTime('1D') },
@@ -673,7 +673,7 @@ export default function StockBubbles() {
           if (response.ok) {
             const data = await response.json();
             if (data.bars) {
-              const estHour = parseInt(new Date().toLocaleString("en-US", {timeZone: "America/New_York", hour12: false, hour: 'numeric'}));
+              const estHour = parseInt(new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour12: false, hour: 'numeric' }));
               const pastMarketClose = estHour >= 16;
 
               Object.keys(data.bars).forEach(symbol => {
@@ -711,7 +711,7 @@ export default function StockBubbles() {
       const stock = stocksMap.get(symbol);
       const name = SYMBOL_NAMES[symbol] || '';
       const query = listSearchQuery.toLowerCase();
-      
+
       const matchesSearch = symbol.toLowerCase().includes(query) || name.toLowerCase().includes(query);
       if (!matchesSearch) return false;
 
@@ -780,11 +780,10 @@ export default function StockBubbles() {
                     if (tf === '1H') runOneHourLogic();
                     if (tf === 'ATH') runATHLogic();
                   }}
-                  className={`px-2 py-1 sm:px-3 rounded-md text-xs font-normal transition-colors ${
-                    activeTimeframe === tf
+                  className={`px-2 py-1 sm:px-3 rounded-md text-xs font-normal transition-colors ${activeTimeframe === tf
                       ? 'bg-gray-700 text-white' // Active state styling
                       : 'text-gray-400 hover:text-white hover:bg-gray-800' // Inactive state styling
-                  }`}
+                    }`}
                 >
                   {tf}
                 </button>
@@ -795,17 +794,15 @@ export default function StockBubbles() {
             <div className="hidden md:flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
               <button
                 onClick={() => setDisplayMode('change')}
-                className={`px-2 py-1 sm:px-3 rounded-md text-[10px] font-normal transition-all ${
-                  displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                }`}
+                className={`px-2 py-1 sm:px-3 rounded-md text-[10px] font-normal transition-all ${displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
               >
                 %
               </button>
               <button
                 onClick={() => setDisplayMode('price')}
-                className={`px-2 py-1 sm:px-3 rounded-md text-[10px] font-normal transition-all ${
-                  displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                }`}
+                className={`px-2 py-1 sm:px-3 rounded-md text-[10px] font-normal transition-all ${displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
               >
                 $
               </button>
@@ -815,7 +812,7 @@ export default function StockBubbles() {
           {/* Mobile Search View (Active) */}
           {isSearchExpanded && (
             <div className="flex items-center gap-2 w-full md:hidden">
-              <button 
+              <button
                 onClick={() => {
                   setIsSearchExpanded(false);
                   setSearchTerm('');
@@ -846,9 +843,8 @@ export default function StockBubbles() {
               <div className="flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
                 <button
                   onClick={() => setViewMode('bubbles')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    viewMode === 'bubbles' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                  }`}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === 'bubbles' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                    }`}
                   title="Bubbles View"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -859,9 +855,8 @@ export default function StockBubbles() {
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    viewMode === 'table' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                  }`}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                    }`}
                   title="Table View"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -870,9 +865,8 @@ export default function StockBubbles() {
                 </button>
                 <button
                   onClick={() => setViewMode('bars')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    viewMode === 'bars' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                  }`}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === 'bars' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                    }`}
                   title="Bars View"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -899,9 +893,8 @@ export default function StockBubbles() {
             <div className="flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
               <button
                 onClick={() => setViewMode('bubbles')}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === 'bubbles' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                }`}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'bubbles' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
                 title="Bubbles View"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -912,9 +905,8 @@ export default function StockBubbles() {
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === 'table' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                }`}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
                 title="Table View"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -923,9 +915,8 @@ export default function StockBubbles() {
               </button>
               <button
                 onClick={() => setViewMode('bars')}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === 'bars' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-                }`}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'bars' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                  }`}
                 title="Bars View"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -949,7 +940,7 @@ export default function StockBubbles() {
 
       {/* Thin Progress Bar for Data Updates */}
       <div className="w-full h-0.5 bg-transparent overflow-hidden shrink-0">
-        <div 
+        <div
           className={`h-full ${progressBarColorClass}`}
           style={{ width: `${progress}%` }}
         />
@@ -983,7 +974,7 @@ export default function StockBubbles() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
                 {listSearchQuery && (
-                  <button 
+                  <button
                     onClick={() => setListSearchQuery('')}
                     className="absolute right-3 top-3 text-gray-500 hover:text-white"
                   >
@@ -993,17 +984,16 @@ export default function StockBubbles() {
                   </button>
                 )}
               </div>
-              
+
               <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-800 self-start md:self-auto">
                 {(['all', 'gainers', 'losers'] as const).map((f) => (
                   <button
                     key={f}
                     onClick={() => setListFilter(f)}
-                    className={`px-4 py-1.5 rounded-md text-[10px] font-normal transition-all uppercase tracking-widest ${
-                      listFilter === f 
-                        ? 'bg-gray-800 text-white shadow-lg' 
+                    className={`px-4 py-1.5 rounded-md text-[10px] font-normal transition-all uppercase tracking-widest ${listFilter === f
+                        ? 'bg-gray-800 text-white shadow-lg'
                         : 'text-gray-500 hover:text-gray-300'
-                    }`}
+                      }`}
                   >
                     {f}
                   </button>
@@ -1079,81 +1069,74 @@ export default function StockBubbles() {
 
         {viewMode === 'bars' && (
           <div className="absolute inset-0 z-10 bg-black flex flex-col p-2 sm:p-6 md:p-10">
-            <div className="flex justify-between items-center mb-4 sm:mb-8 border-b border-gray-800 pb-4">
-              <div>
-                <h2 className="text-xl sm:text-3xl font-normal text-white tracking-tight">Performance Rankings</h2>
-                <p className="text-gray-500 text-sm mt-1">Relative performance for the {activeTimeframe} period</p>
-              </div>
-            </div>
-
-            {/* Search and Filter Controls */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 mb-6">
-              <div className="relative flex-grow max-w-md">
-                <input
-                  type="text"
-                  placeholder="Filter by ticker or name..."
-                  value={listSearchQuery}
-                  onChange={(e) => setListSearchQuery(e.target.value)}
-                  className="w-full bg-gray-900 text-white border border-gray-700 rounded-lg py-2.5 pl-10 pr-4 focus:outline-none focus:border-white/50 transition-colors"
-                />
-                <svg className="w-5 h-5 text-gray-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              
-              <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-800 self-start md:self-auto">
-                {(['all', 'gainers', 'losers'] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setListFilter(f)}
-                    className={`px-4 py-1.5 rounded-md text-[10px] font-normal transition-all uppercase tracking-widest ${
-                      listFilter === f 
-                        ? 'bg-gray-800 text-white shadow-lg' 
-                        : 'text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-grow overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/10 p-2 sm:p-4">
+            <div className="flex-grow overflow-y-auto custom-scrollbar md:grid md:grid-cols-2 md:gap-x-8 lg:gap-x-12">
               {(() => {
                 // Scale relative to global performance for consistency
                 const maxAbsChange = Math.max(...stocks.map(s => Math.abs(s.change)), 0.1);
 
-                return rankedStocks.map(stock => {
-                  const isPositive = stock.change >= 0;
-                  const barWidth = (Math.abs(stock.change) / maxAbsChange) * 50;
+                const renderStockBar = (stock: Stock) => {
+                    const isPositive = stock.change >= 0;
+                    const barWidth = (Math.abs(stock.change) / maxAbsChange) * 50;
+  
+                    return (
+                      <div
+                        key={stock.symbol}
+                        className="flex items-center gap-2 py-1 px-2 hover:bg-white/5 rounded-lg transition-colors cursor-pointer group"
+                        onClick={() => setSelectedStock(stock)}
+                      >
+                        <div className="w-12 sm:w-16 shrink-0">
+                          <span className="text-white text-[10px] sm:text-xs font-medium">{stock.symbol}</span>
+                        </div>
+  
+                        <div className="flex-1 relative h-6 sm:h-8 flex items-center">
+                          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-800 z-10" />
+                          <div className="absolute inset-0 bg-gray-900/20 rounded-sm" />
+                          <div
+                            className={`h-2 sm:h-3 absolute top-1/2 -translate-y-1/2 transition-all duration-500 ${isPositive ? 'left-1/2 bg-[#00ff00]/60 group-hover:bg-[#00ff00]' : 'right-1/2 bg-[#ff0000]/60 group-hover:bg-[#ff0000]'} rounded-sm`}
+                            style={{ width: `${barWidth}%` }}
+                          />
+                        </div>
+  
+                        <div className={`w-16 sm:w-20 text-right text-[10px] sm:text-xs font-mono ${isPositive ? 'text-[#00ff00]' : 'text-[#ff0000]'}`}>
+                          {isPositive ? '+' : ''}{stock.change.toFixed(2)}%
+                        </div>
+                      </div>
+                    );
+                };
+
+                if (listFilter === 'all') {
+                  const gainers = rankedStocks.filter(s => s.change >= 0);
+                  const losers = rankedStocks.filter(s => s.change < 0).sort((a, b) => a.change - b.change);
 
                   return (
-                    <div 
-                      key={stock.symbol} 
-                      className="flex items-center gap-3 py-2 px-2 hover:bg-white/5 rounded transition-colors cursor-pointer group"
-                      onClick={() => setSelectedStock(stock)}
-                    >
-                      <div className="w-12 sm:w-16 shrink-0">
-                        <span className="text-white text-xs sm:text-sm font-medium">{stock.symbol}</span>
+                    <>
+                      {/* Single column on mobile */}
+                      <div className="md:hidden">
+                        {rankedStocks.map(renderStockBar)}
                       </div>
-                      
-                      <div className="flex-1 relative h-6 sm:h-8 flex items-center">
-                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-800 z-10" />
-                        <div className="absolute inset-0 bg-gray-900/20 rounded-sm" />
-                        <div 
-                          className={`h-4 sm:h-5 absolute top-1/2 -translate-y-1/2 transition-all duration-500 ${isPositive ? 'left-1/2 bg-[#00ff00]/60 group-hover:bg-[#00ff00]' : 'right-1/2 bg-[#ff0000]/60 group-hover:bg-[#ff0000]'} rounded-sm`}
-                          style={{ width: `${barWidth}%` }}
-                        />
+                      {/* Two columns on desktop */}
+                      <div className="hidden md:block overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/10 p-2 sm:p-4">
+                        <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2 px-2">Gainers</h3>
+                        {gainers.map(renderStockBar)}
                       </div>
-
-                      <div className={`w-16 sm:w-20 text-right text-[10px] sm:text-xs font-mono ${isPositive ? 'text-[#00ff00]' : 'text-[#ff0000]'}`}>
-                        {isPositive ? '+' : ''}{stock.change.toFixed(2)}%
+                      <div className="hidden md:block overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/10 p-2 sm:p-4">
+                        <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2 px-2">Losers</h3>
+                        {losers.map(renderStockBar)}
                       </div>
-                    </div>
+                    </>
                   );
-                });
+                }
+
+                // Fallback for 'gainers' or 'losers' filter, or mobile 'all'
+                return (
+                  <div className="md:col-span-2">
+                     <div className="overflow-y-auto custom-scrollbar border border-gray-800 rounded-xl bg-gray-900/10 p-2 sm:p-4">
+                      {rankedStocks.map(renderStockBar)}
+                    </div>
+                  </div>
+                );
               })()}
-              
+
               {filteredListSymbols.length === 0 && (
                 <div className="h-full flex items-center justify-center text-gray-600 font-normal tracking-widest uppercase text-sm">
                   No performance data matches search
@@ -1168,11 +1151,11 @@ export default function StockBubbles() {
 
         {/* Stock Details Modal Overlay */}
         {selectedStock && (
-          <div 
+          <div
             className="absolute inset-0 flex items-center justify-center z-50 p-4"
             onClick={() => setSelectedStock(null)}
           >
-            <div 
+            <div
               className="bg-gray-900 border border-gray-700 rounded-2xl p-6 sm:p-8 w-[95%] max-w-sm relative max-h-full overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1192,12 +1175,12 @@ export default function StockBubbles() {
                 </h3>
                 <p className="text-gray-500 text-base font-normal tracking-widest">{selectedStock.symbol}</p>
               </div>
-              
+
               {/* Real-time Historical Chart */}
               <div className="h-40 w-full bg-black/40 rounded-xl mb-8 border border-gray-800 relative overflow-hidden flex flex-col">
-                <StockChart 
-                  symbol={selectedStock.symbol} 
-                  color={selectedStock.change >= 0 ? '#00ff00' : '#ff0000'} 
+                <StockChart
+                  symbol={selectedStock.symbol}
+                  color={selectedStock.change >= 0 ? '#00ff00' : '#ff0000'}
                 />
                 <span className="text-gray-600 text-[10px] font-normal uppercase tracking-widest text-center py-2 border-t border-gray-800 bg-black/20 relative z-10">
                   30-Day Price Trend
@@ -1223,7 +1206,7 @@ export default function StockBubbles() {
                     ${selectedStock.price.toFixed(2)}
                   </span>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500 text-xs font-normal uppercase tracking-widest">24h Change</span>
                   <span className={`text-3xl font-normal ${selectedStock.change >= 0 ? 'text-[#00ff00]' : 'text-[#ff0000]'}`}>
@@ -1269,11 +1252,10 @@ export default function StockBubbles() {
                       if (tf === '1H') runOneHourLogic();
                       if (tf === 'ATH') runATHLogic();
                     }}
-                    className={`w-full text-left px-4 py-2 text-[10px] font-normal uppercase tracking-widest transition-colors ${
-                      activeTimeframe === tf 
-                        ? 'bg-gray-700 text-white' 
+                    className={`w-full text-left px-4 py-2 text-[10px] font-normal uppercase tracking-widest transition-colors ${activeTimeframe === tf
+                        ? 'bg-gray-700 text-white'
                         : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                    }`}
+                      }`}
                   >
                     {tf}
                   </button>
@@ -1286,17 +1268,15 @@ export default function StockBubbles() {
           <div className="flex items-center bg-gray-900 rounded-lg p-1 border border-gray-800">
             <button
               onClick={() => { setDisplayMode('change'); setIsTimeframeMenuOpen(false); }}
-              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
-                displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-              }`}
+              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${displayMode === 'change' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
             >
               %
             </button>
             <button
               onClick={() => setDisplayMode('price')}
-              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${
-                displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
-              }`}
+              className={`px-3 py-1 rounded-md text-[10px] font-normal transition-all ${displayMode === 'price' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
+                }`}
             >
               $
             </button>
