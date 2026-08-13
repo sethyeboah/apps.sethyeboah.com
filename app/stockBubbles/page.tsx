@@ -156,8 +156,9 @@ const SYMBOL_NAMES: Record<string, string> = {
   'NOK': 'Nokia',
   'SATS': 'EchoStar Corporation',
   'BKSY': 'BlackSky Technology Inc.',
-  'FLY': 'Firefly Aerospace',
-  'SPCX': 'SpaceX'
+  'FLY': 'Firefly Aerospace', // Note: Firefly is private, ticker is illustrative
+  'SPCX': 'SpaceX', // Note: SpaceX is private, ticker is illustrative
+  'SKHY': 'SK Hynix Inc.'
 };
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
