@@ -223,10 +223,21 @@ export default function StockBubbles() {
   const [sectorsData, setSectorsData] = useState<SectorPerformance[]>([]);
   const [sectorsLoading, setSectorsLoading] = useState(false);
   const [sectorsError, setSectorsError] = useState<string | null>(null);
+  const [sectorRetryCount, setSectorRetryCount] = useState(0);
   const [sectorsSearch, setSectorsSearch] = useState('');
   const [sectorsSort, setSectorsSort] = useState<'default' | 'performance' | 'name'>('performance');
   const [sectorsFilter, setSectorsFilter] = useState<'all' | 'gainers' | 'losers'>('all');
   const [sectorsLastUpdated, setSectorsLastUpdated] = useState<Date | null>(null);
+
+  // References for Auto-Refresh (10s) and Retry Timers
+  const sectorIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const sectorRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeMenuRef = useRef(activeMenu);
+
+  // Keep activeMenuRef updated to safely check panel visibility in async timers
+  useEffect(() => {
+    activeMenuRef.current = activeMenu;
+  }, [activeMenu]);
   const [isTimeframeMenuOpen, setIsTimeframeMenuOpen] = useState(false);
   const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
   const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
@@ -296,20 +307,32 @@ export default function StockBubbles() {
   }, []);
 
   /**
-   * Fetch Sector ETFs Snapshots from Alpaca API
-   * Retrieves latest quote/trade data and computes daily performance percentage.
+   * Fetch Sector ETFs Snapshots from Alpaca API with:
+   * 1. Live automatic refresh every 10 seconds.
+   * 2. Continuous retry on failure (every 3 seconds) until valid data is returned.
    */
-  const fetchSectorData = useCallback(async () => {
+  const fetchSectorData = useCallback(async (isAutoRefresh = false) => {
+    // Clear any existing pending retry timer before initiating a new request
+    if (sectorRetryTimerRef.current) {
+      clearTimeout(sectorRetryTimerRef.current);
+      sectorRetryTimerRef.current = null;
+    }
+
+    // Only proceed if the Sectors panel is currently active
+    if (activeMenuRef.current !== 'sectors') {
+      return;
+    }
+
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
 
     if (!apiKey || !secretKey) {
       setSectorsError('Alpaca API keys are not configured in environment variables.');
+      setSectorsLoading(false);
       return;
     }
 
     setSectorsLoading(true);
-    setSectorsError(null);
 
     try {
       const symbolsQuery = SECTOR_ETFS.map((item) => item.symbol).join(',');
@@ -325,15 +348,21 @@ export default function StockBubbles() {
 
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error('Alpaca rate limit reached (429). Please wait a few seconds and click Refresh.');
+          throw new Error('Alpaca rate limit reached (429). Retrying automatically in 3s...');
         }
-        throw new Error(`Failed to fetch sector data from Alpaca (HTTP ${response.status})`);
+        throw new Error(`Failed to fetch sector data from Alpaca (HTTP ${response.status}). Retrying...`);
       }
 
       const snapshots = await response.json();
 
       if (snapshots && snapshots.message) {
-        throw new Error(snapshots.message);
+        throw new Error(`Alpaca API notice: ${snapshots.message}. Retrying...`);
+      }
+
+      // Verify that at least one valid sector ETF was returned
+      const hasValidData = SECTOR_ETFS.some((item) => snapshots[item.symbol]);
+      if (!hasValidData) {
+        throw new Error('No valid snapshot data returned for sector ETFs. Retrying...');
       }
 
       const parsedSectors: SectorPerformance[] = SECTOR_ETFS.map((item) => {
@@ -358,22 +387,72 @@ export default function StockBubbles() {
         };
       });
 
+      // Successful fetch - store data, clear errors, reset retry count, and stop retrying
       setSectorsData(parsedSectors);
       setSectorsLastUpdated(new Date());
+      setSectorsError(null);
+      setSectorRetryCount(0);
+      setSectorsLoading(false);
     } catch (err: any) {
       console.error('Error fetching Alpaca sector data:', err);
-      setSectorsError(err?.message || 'Failed to load sector performance from Alpaca.');
-    } finally {
+      const errorMessage = err?.message || 'Failed to load sector performance from Alpaca. Retrying...';
+      setSectorsError(errorMessage);
+      setSectorRetryCount((prev) => prev + 1);
       setSectorsLoading(false);
+
+      // Continuously retry after 3 seconds until sector data is successfully returned
+      if (activeMenuRef.current === 'sectors') {
+        sectorRetryTimerRef.current = setTimeout(() => {
+          fetchSectorData();
+        }, 3000);
+      }
     }
   }, []);
 
-  // Automatically trigger sector data fetch when Sectors menu is opened
+  /**
+   * Automatic 10-Second Refresh & Lifecycle Management for Sectors Panel:
+   * - Performs initial data fetch when Sectors panel is opened.
+   * - Automatically polls & refreshes every 10 seconds while the panel remains active.
+   * - Safely cleans up all intervals and retry timers when the panel is closed or unmounted.
+   */
   useEffect(() => {
-    if (activeMenu === 'sectors' && sectorsData.length === 0 && !sectorsLoading) {
-      fetchSectorData();
+    if (activeMenu === 'sectors') {
+      // 1. Initial fetch if we don't have sector data yet
+      if (sectorsData.length === 0 && !sectorsLoading) {
+        fetchSectorData();
+      }
+
+      // 2. Set up recurring 10-second auto-refresh interval
+      sectorIntervalRef.current = setInterval(() => {
+        if (activeMenuRef.current === 'sectors') {
+          fetchSectorData(true);
+        }
+      }, 10000); // 10,000 milliseconds = 10 seconds
+    } else {
+      // Clear interval and retry timers if Sectors panel is closed
+      if (sectorIntervalRef.current) {
+        clearInterval(sectorIntervalRef.current);
+        sectorIntervalRef.current = null;
+      }
+      if (sectorRetryTimerRef.current) {
+        clearTimeout(sectorRetryTimerRef.current);
+        sectorRetryTimerRef.current = null;
+      }
+      setSectorRetryCount(0);
     }
-  }, [activeMenu, sectorsData.length, sectorsLoading, fetchSectorData]);
+
+    return () => {
+      // Cleanup timers when component unmounts or activeMenu changes
+      if (sectorIntervalRef.current) {
+        clearInterval(sectorIntervalRef.current);
+        sectorIntervalRef.current = null;
+      }
+      if (sectorRetryTimerRef.current) {
+        clearTimeout(sectorRetryTimerRef.current);
+        sectorRetryTimerRef.current = null;
+      }
+    };
+  }, [activeMenu, fetchSectorData]);
 
   // Maximum absolute change percent for normalizing bar widths (like the main bars view)
   const maxSectorAbsChange = useMemo(() => {
@@ -1372,21 +1451,43 @@ export default function StockBubbles() {
                   </div>
                 </div>
 
-                {/* Error Banner (e.g. rate limit notice with retry button) */}
+                {/* Continuous Retry Error Banner */}
                 {sectorsError && (
-                  <div id="sectors-error-alert" className="m-3 p-3 bg-red-950/40 border border-red-800/80 rounded-lg text-xs text-red-200 flex flex-col gap-2 shrink-0">
+                  <div
+                    id="sectors-error-alert"
+                    className="m-3 p-3 bg-red-950/40 border border-red-800/80 rounded-lg text-xs text-red-200 flex flex-col gap-2 shrink-0"
+                  >
                     <div className="flex items-start gap-2">
-                      <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      <svg
+                        className="w-4 h-4 text-red-400 shrink-0 mt-0.5 animate-pulse"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
                       </svg>
-                      <span className="flex-1 leading-relaxed">{sectorsError}</span>
+                      <div className="flex-1 leading-relaxed">
+                        <p id="sectors-error-message">{sectorsError}</p>
+                        {sectorRetryCount > 0 && (
+                          <p id="sectors-retry-status" className="text-[11px] text-amber-300/90 mt-1 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping inline-block" />
+                            <span>Continuously retrying (Attempt #{sectorRetryCount})...</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <button
+                      id="sectors-retry-now-button"
                       type="button"
                       onClick={() => fetchSectorData()}
                       className="self-end px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-white rounded text-[11px] font-medium transition-colors"
                     >
-                      Retry
+                      Retry Now
                     </button>
                   </div>
                 )}
@@ -1512,13 +1613,16 @@ export default function StockBubbles() {
                   )}
                 </div>
 
-                {/* Footer with Timestamp and Count */}
+                {/* Footer with Timestamp, Count, and Auto-Refresh Indicator */}
                 {sectorsLastUpdated && (
                   <div
                     id="sectors-footer-timestamp"
                     className="p-2.5 border-t border-gray-800/80 bg-black/40 text-[10px] text-gray-500 flex justify-between items-center shrink-0"
                   >
-                    <span>18 Sectors Tracked</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${sectorsLoading ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'}`} />
+                      <span>Auto-refreshes every 10s</span>
+                    </span>
                     <span>Updated {sectorsLastUpdated.toLocaleTimeString()}</span>
                   </div>
                 )}
