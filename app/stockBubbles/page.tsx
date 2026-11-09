@@ -163,6 +163,49 @@ const SYMBOL_NAMES: Record<string, string> = {
 
 const SP500_SYMBOLS = Object.keys(SYMBOL_NAMES);
 
+/**
+ * Sector to ETF Configuration
+ * Maps market sectors to their corresponding ETF ticker symbols for Alpaca snapshots.
+ */
+interface SectorETFItem {
+  sector: string;
+  symbol: string;
+}
+
+const SECTOR_ETFS: readonly SectorETFItem[] = [
+  { sector: 'Semiconductor', symbol: 'SMH' },
+  { sector: 'Space', symbol: 'NASA' },
+  { sector: 'Memory', symbol: 'DRAM' },
+  { sector: 'Cybersecurity', symbol: 'CIBR' },
+  { sector: 'Database', symbol: 'SKYY' },
+  { sector: 'Software', symbol: 'IGV' },
+  { sector: 'Information Technology', symbol: 'VGT' },
+  { sector: 'S&P500', symbol: 'SPY' },
+  { sector: 'Nasdaq 100', symbol: 'QQQ' },
+  { sector: 'Industrials', symbol: 'XLI' },
+  { sector: 'Consumer Discretionary', symbol: 'XLY' },
+  { sector: 'Energy', symbol: 'XLE' },
+  { sector: 'Health Care', symbol: 'XLV' },
+  { sector: 'Utilities', symbol: 'XLU' },
+  { sector: 'Materials', symbol: 'XLB' },
+  { sector: 'Real Estate', symbol: 'XLRE' },
+  { sector: 'Financials', symbol: 'XLF' },
+  { sector: 'Consumer Staples', symbol: 'XLP' },
+];
+
+/**
+ * Sector Performance Data Interface
+ * Stores daily price, previous close, and performance percentage.
+ */
+interface SectorPerformance {
+  sector: string;
+  symbol: string;
+  price: number;
+  prevClose: number;
+  changePercent: number;
+  changeAmount: number;
+}
+
 export default function StockBubbles() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
@@ -174,6 +217,16 @@ export default function StockBubbles() {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'bubbles' | 'table' | 'bars'>('bubbles');
+  const [activeMenu, setActiveMenu] = useState<'news' | 'sectors' | null>(null);
+
+  // Sector Performance States
+  const [sectorsData, setSectorsData] = useState<SectorPerformance[]>([]);
+  const [sectorsLoading, setSectorsLoading] = useState(false);
+  const [sectorsError, setSectorsError] = useState<string | null>(null);
+  const [sectorsSearch, setSectorsSearch] = useState('');
+  const [sectorsSort, setSectorsSort] = useState<'default' | 'performance' | 'name'>('performance');
+  const [sectorsFilter, setSectorsFilter] = useState<'all' | 'gainers' | 'losers'>('all');
+  const [sectorsLastUpdated, setSectorsLastUpdated] = useState<Date | null>(null);
   const [isTimeframeMenuOpen, setIsTimeframeMenuOpen] = useState(false);
   const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
   const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
@@ -241,6 +294,124 @@ export default function StockBubbles() {
       }
     }
   }, []);
+
+  /**
+   * Fetch Sector ETFs Snapshots from Alpaca API
+   * Retrieves latest quote/trade data and computes daily performance percentage.
+   */
+  const fetchSectorData = useCallback(async () => {
+    const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
+    const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
+
+    if (!apiKey || !secretKey) {
+      setSectorsError('Alpaca API keys are not configured in environment variables.');
+      return;
+    }
+
+    setSectorsLoading(true);
+    setSectorsError(null);
+
+    try {
+      const symbolsQuery = SECTOR_ETFS.map((item) => item.symbol).join(',');
+      const response = await fetch(
+        `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbolsQuery}`,
+        {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': secretKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Alpaca rate limit reached (429). Please wait a few seconds and click Refresh.');
+        }
+        throw new Error(`Failed to fetch sector data from Alpaca (HTTP ${response.status})`);
+      }
+
+      const snapshots = await response.json();
+
+      if (snapshots && snapshots.message) {
+        throw new Error(snapshots.message);
+      }
+
+      const parsedSectors: SectorPerformance[] = SECTOR_ETFS.map((item) => {
+        const snapshot = snapshots[item.symbol];
+        const currentPrice =
+          snapshot?.latestTrade?.p ||
+          snapshot?.minuteBar?.c ||
+          snapshot?.dailyBar?.c ||
+          0;
+        const prevDayClose = snapshot?.prevDailyBar?.c || currentPrice;
+        const changePercent =
+          prevDayClose !== 0 ? ((currentPrice - prevDayClose) / prevDayClose) * 100 : 0;
+        const changeAmount = currentPrice - prevDayClose;
+
+        return {
+          sector: item.sector,
+          symbol: item.symbol,
+          price: currentPrice,
+          prevClose: prevDayClose,
+          changePercent,
+          changeAmount,
+        };
+      });
+
+      setSectorsData(parsedSectors);
+      setSectorsLastUpdated(new Date());
+    } catch (err: any) {
+      console.error('Error fetching Alpaca sector data:', err);
+      setSectorsError(err?.message || 'Failed to load sector performance from Alpaca.');
+    } finally {
+      setSectorsLoading(false);
+    }
+  }, []);
+
+  // Automatically trigger sector data fetch when Sectors menu is opened
+  useEffect(() => {
+    if (activeMenu === 'sectors' && sectorsData.length === 0 && !sectorsLoading) {
+      fetchSectorData();
+    }
+  }, [activeMenu, sectorsData.length, sectorsLoading, fetchSectorData]);
+
+  // Maximum absolute change percent for normalizing bar widths (like the main bars view)
+  const maxSectorAbsChange = useMemo(() => {
+    const absValues = sectorsData.map((s) => Math.abs(s.changePercent));
+    const max = Math.max(...absValues, 0.1);
+    return max;
+  }, [sectorsData]);
+
+  // Filtered and sorted sector performance list for rendering
+  const displayedSectors = useMemo(() => {
+    let list = [...sectorsData];
+
+    // Filter by search query
+    if (sectorsSearch.trim()) {
+      const query = sectorsSearch.toLowerCase().trim();
+      list = list.filter(
+        (s) =>
+          s.sector.toLowerCase().includes(query) ||
+          s.symbol.toLowerCase().includes(query)
+      );
+    }
+
+    // Filter by Gainers / Losers tab
+    if (sectorsFilter === 'gainers') {
+      list = list.filter((s) => s.changePercent >= 0);
+    } else if (sectorsFilter === 'losers') {
+      list = list.filter((s) => s.changePercent < 0);
+    }
+
+    // Sort by selected criteria
+    if (sectorsSort === 'performance') {
+      list.sort((a, b) => b.changePercent - a.changePercent);
+    } else if (sectorsSort === 'name') {
+      list.sort((a, b) => a.sector.localeCompare(b.sector));
+    }
+
+    return list;
+  }, [sectorsData, sectorsSearch, sectorsFilter, sectorsSort]);
 
   const connectWebSocket = useCallback(() => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
@@ -947,11 +1118,443 @@ export default function StockBubbles() {
         />
       </div>
 
-      {/* Bubbles Container */}
-      <div className="relative w-full flex-1 overflow-hidden">
-        {viewMode === 'bubbles' && (
-          <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} displayMode={displayMode} />
+      {/* Main Workspace Area (Left Vertical Menu Bar + Canvas Viewport) */}
+      <div className="relative w-full flex-1 overflow-hidden flex flex-row">
+        {/* Left Vertical Menu Bar */}
+        <aside
+          id="canvas-vertical-menu-bar"
+          aria-label="Side Navigation"
+          className="relative z-20 flex flex-col items-center w-12 sm:w-14 bg-black/60 backdrop-blur-md border-r border-gray-800 py-3 sm:py-4 gap-3 shrink-0 select-none"
+        >
+          {/* Menu Item: News */}
+          <div className="relative group flex items-center justify-center">
+            <button
+              id="menu-item-news"
+              type="button"
+              onClick={() => setActiveMenu(prev => prev === 'news' ? null : 'news')}
+              className={`p-2 sm:p-2.5 rounded-xl transition-all duration-150 flex items-center justify-center ${
+                activeMenu === 'news'
+                  ? 'bg-gray-800 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
+              }`}
+              aria-label="News"
+            >
+              {/* News Logo / Icon */}
+              <svg
+                id="logo-news"
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth="1.8"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                />
+              </svg>
+            </button>
+
+            {/* Title Displayed on Hover */}
+            <span
+              id="tooltip-news"
+              role="tooltip"
+              className="pointer-events-none absolute left-full ml-2.5 px-2.5 py-1 text-xs font-normal text-white bg-gray-900 border border-gray-700 rounded-md shadow-lg whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150 z-50"
+            >
+              News
+            </span>
+          </div>
+
+          {/* Menu Item: Sectors */}
+          <div className="relative group flex items-center justify-center">
+            <button
+              id="menu-item-sectors"
+              type="button"
+              onClick={() => setActiveMenu(prev => prev === 'sectors' ? null : 'sectors')}
+              className={`p-2 sm:p-2.5 rounded-xl transition-all duration-150 flex items-center justify-center ${
+                activeMenu === 'sectors'
+                  ? 'bg-gray-800 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
+              }`}
+              aria-label="Sectors"
+            >
+              {/* Sectors Logo / Icon */}
+              <svg
+                id="logo-sectors"
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth="1.8"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z"
+                />
+              </svg>
+            </button>
+
+            {/* Title Displayed on Hover */}
+            <span
+              id="tooltip-sectors"
+              role="tooltip"
+              className="pointer-events-none absolute left-full ml-2.5 px-2.5 py-1 text-xs font-normal text-white bg-gray-900 border border-gray-700 rounded-md shadow-lg whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150 z-50"
+            >
+              Sectors
+            </span>
+          </div>
+        </aside>
+
+        {/* Side Panel Overlay (When News or Sectors is Clicked) */}
+        {activeMenu && (
+          <div
+            id="side-menu-panel"
+            className="absolute inset-y-0 left-12 sm:left-14 w-80 sm:w-96 md:w-[420px] max-w-[calc(100vw-3.5rem)] bg-gray-950/95 backdrop-blur-md border-r border-gray-800 z-30 flex flex-col shadow-2xl transition-all"
+          >
+            {/* SECTORS PANEL: Displays daily performance for 18 market sector ETFs from Alpaca */}
+            {activeMenu === 'sectors' && (
+              <div id="sectors-container" className="flex flex-col h-full overflow-hidden">
+                {/* Sectors Header */}
+                <div id="sectors-panel-header" className="p-4 border-b border-gray-800 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    {/* Sectors Pie Logo */}
+                    <div className="p-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 id="sectors-title" className="text-base font-semibold text-white leading-tight">
+                        Sector Performance
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* Header Actions: Refresh and Close */}
+                  <div className="flex items-center gap-1">
+                    {/* Refresh Data Button */}
+                    <button
+                      id="sectors-refresh-button"
+                      type="button"
+                      onClick={() => fetchSectorData()}
+                      disabled={sectorsLoading}
+                      title="Refresh sector data from Alpaca"
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+                      aria-label="Refresh Sectors"
+                    >
+                      <svg
+                        className={`w-4 h-4 ${sectorsLoading ? 'animate-spin' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                    </button>
+
+                    {/* Close Panel Button */}
+                    <button
+                      id="sectors-close-button"
+                      type="button"
+                      onClick={() => setActiveMenu(null)}
+                      title="Close panel"
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                      aria-label="Close Panel"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter & Sorting Controls */}
+                <div id="sectors-controls-bar" className="p-3 border-b border-gray-800/80 flex flex-col gap-2 shrink-0 bg-black/30">
+                  {/* Search / Filter Input */}
+                  <div className="relative">
+                    <input
+                      id="sectors-search-input"
+                      type="text"
+                      placeholder="Filter sector or ETF ticker..."
+                      value={sectorsSearch}
+                      onChange={(e) => setSectorsSearch(e.target.value)}
+                      className="w-full bg-gray-900/90 text-white text-xs border border-gray-700/80 rounded-lg py-1.5 pl-8 pr-7 focus:outline-none focus:border-white/40 transition-colors"
+                    />
+                    <svg
+                      className="w-4 h-4 text-gray-500 absolute left-2.5 top-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                    {sectorsSearch && (
+                      <button
+                        onClick={() => setSectorsSearch('')}
+                        className="absolute right-2.5 top-2 text-gray-500 hover:text-white"
+                        aria-label="Clear Search"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Tabs & Sort Controls (Bars View Representation) */}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Filter Tabs: All, Gainers, Losers */}
+                    <div id="sectors-filter-tabs" className="flex bg-gray-900/60 p-0.5 rounded-md border border-gray-800">
+                      {(['all', 'gainers', 'losers'] as const).map((tab) => (
+                        <button
+                          key={tab}
+                          id={`sectors-filter-${tab}`}
+                          type="button"
+                          onClick={() => setSectorsFilter(tab)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-normal transition-colors uppercase tracking-wider ${
+                            sectorsFilter === tab
+                              ? 'bg-gray-800 text-white font-medium shadow-sm'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Sort Selector */}
+                    <div id="sectors-sort-container" className="flex items-center gap-1 text-[10px]">
+                      <span className="text-gray-500 uppercase tracking-wider text-[9px]">Sort:</span>
+                      <div className="flex bg-gray-900/60 p-0.5 rounded-md border border-gray-800">
+                        {(
+                          [
+                            { key: 'performance', label: 'Perf' },
+                            { key: 'name', label: 'Name' },
+                            { key: 'default', label: 'Def' },
+                          ] as const
+                        ).map((option) => (
+                          <button
+                            key={option.key}
+                            id={`sort-button-${option.key}`}
+                            type="button"
+                            onClick={() => setSectorsSort(option.key)}
+                            className={`px-1.5 py-0.5 rounded transition-colors ${
+                              sectorsSort === option.key
+                                ? 'bg-gray-800 text-white font-medium shadow-sm'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error Banner (e.g. rate limit notice with retry button) */}
+                {sectorsError && (
+                  <div id="sectors-error-alert" className="m-3 p-3 bg-red-950/40 border border-red-800/80 rounded-lg text-xs text-red-200 flex flex-col gap-2 shrink-0">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span className="flex-1 leading-relaxed">{sectorsError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fetchSectorData()}
+                      className="self-end px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-white rounded text-[11px] font-medium transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {/* Scrollable Sector Bars List */}
+                <div id="sectors-list-container" className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
+                  {/* Column Legend Header for the Bars View */}
+                  {displayedSectors.length > 0 && !sectorsLoading && (
+                    <div
+                      id="sectors-bar-legend"
+                      className="flex items-center gap-2 px-2 pb-1.5 mb-1 text-[9px] uppercase tracking-wider text-gray-500 border-b border-gray-800/60 font-medium"
+                    >
+                      <div className="w-24 sm:w-28 shrink-0">Sector / ETF</div>
+                      <div className="flex-1 relative flex items-center justify-between px-1 text-[8px] text-gray-600 font-mono">
+                        <span>- loss</span>
+                        <span className="text-gray-400 font-semibold">0%</span>
+                        <span>gain +</span>
+                      </div>
+                      <div className="w-14 sm:w-16 text-right shrink-0">Change</div>
+                    </div>
+                  )}
+
+                  {/* Loading Skeleton */}
+                  {sectorsLoading && sectorsData.length === 0 && (
+                    <div id="sectors-loading-skeleton" className="space-y-2">
+                      {Array.from({ length: 9 }).map((_, idx) => (
+                        <div key={idx} className="h-10 bg-gray-900/50 border border-gray-800/50 rounded-lg animate-pulse p-2 flex items-center gap-2">
+                          <div className="w-24 h-4 bg-gray-800 rounded"></div>
+                          <div className="flex-1 h-3 bg-gray-800/60 rounded"></div>
+                          <div className="w-12 h-4 bg-gray-800 rounded"></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Render Sector Performance Bars (Similar to main bars view) */}
+                  {!sectorsLoading || sectorsData.length > 0 ? (
+                    displayedSectors.map((sectorItem) => {
+                      const isPositive = sectorItem.changePercent >= 0;
+                      // Calculate relative bar width out of 50% max from the 0% centerline
+                      const barWidth = (Math.abs(sectorItem.changePercent) / maxSectorAbsChange) * 50;
+
+                      return (
+                        <div
+                          key={sectorItem.symbol}
+                          id={`sector-bar-row-${sectorItem.symbol.toLowerCase()}`}
+                          onClick={() => {
+                            if (sectorItem.price > 0) {
+                              setSelectedStock({
+                                symbol: sectorItem.symbol,
+                                name: `${sectorItem.sector} (${sectorItem.symbol})`,
+                                price: sectorItem.price,
+                                change: sectorItem.changePercent,
+                                prevClose: sectorItem.prevClose,
+                                marketCap: 0,
+                              });
+                            }
+                          }}
+                          className="flex items-center gap-2 py-1.5 px-2 hover:bg-white/5 rounded-lg transition-colors cursor-pointer group"
+                          title={`Click to view ${sectorItem.sector} (${sectorItem.symbol}) chart`}
+                        >
+                          {/* Sector Name & ETF Symbol */}
+                          <div className="w-24 sm:w-28 shrink-0 flex flex-col min-w-0">
+                            <span
+                              id={`sector-name-${sectorItem.symbol.toLowerCase()}`}
+                              className="text-white text-xs font-medium truncate group-hover:text-blue-400 transition-colors"
+                            >
+                              {sectorItem.sector}
+                            </span>
+                            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
+                              <span className="font-semibold text-gray-400">{sectorItem.symbol}</span>
+                              {sectorItem.price > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span>${sectorItem.price.toFixed(2)}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Centerline Relative Bar Track (Mirroring Main Bars View) */}
+                          <div
+                            id={`sector-bar-track-${sectorItem.symbol.toLowerCase()}`}
+                            className="flex-1 relative h-6 sm:h-7 flex items-center"
+                          >
+                            {/* 0% Center Reference Axis */}
+                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-800 z-10" />
+                            {/* Track Background */}
+                            <div className="absolute inset-0 bg-gray-900/30 rounded-sm" />
+                            {/* Dynamic Performance Filled Bar */}
+                            <div
+                              id={`sector-bar-fill-${sectorItem.symbol.toLowerCase()}`}
+                              className={`h-2 sm:h-2.5 absolute top-1/2 -translate-y-1/2 transition-all duration-500 rounded-sm ${
+                                isPositive
+                                  ? 'left-1/2 bg-[#00ff00]/60 group-hover:bg-[#00ff00]'
+                                  : 'right-1/2 bg-[#ff0000]/60 group-hover:bg-[#ff0000]'
+                              }`}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+
+                          {/* Performance Percentage Label */}
+                          <div
+                            id={`sector-change-${sectorItem.symbol.toLowerCase()}`}
+                            className={`w-14 sm:w-16 text-right text-[11px] sm:text-xs font-mono font-medium shrink-0 ${
+                              isPositive ? 'text-[#00ff00]' : 'text-[#ff0000]'
+                            }`}
+                          >
+                            {sectorItem.price > 0
+                              ? `${isPositive ? '+' : ''}${sectorItem.changePercent.toFixed(2)}%`
+                              : '---'}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : null}
+
+                  {/* Empty Search / Filter Notice */}
+                  {displayedSectors.length === 0 && !sectorsLoading && !sectorsError && (
+                    <div id="sectors-empty-search" className="py-12 text-center text-gray-500 text-xs">
+                      No sectors match {sectorsSearch ? `"${sectorsSearch}"` : `filter "${sectorsFilter}"`}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer with Timestamp and Count */}
+                {sectorsLastUpdated && (
+                  <div
+                    id="sectors-footer-timestamp"
+                    className="p-2.5 border-t border-gray-800/80 bg-black/40 text-[10px] text-gray-500 flex justify-between items-center shrink-0"
+                  >
+                    <span>18 Sectors Tracked</span>
+                    <span>Updated {sectorsLastUpdated.toLocaleTimeString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* NEWS PANEL (Placeholder) */}
+            {activeMenu === 'news' && (
+              <div id="news-container" className="flex flex-col h-full p-4">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+                  <h2 className="text-base font-medium text-white">Market News</h2>
+                  <button
+                    id="close-news-panel-button"
+                    type="button"
+                    onClick={() => setActiveMenu(null)}
+                    className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors"
+                    aria-label="Close News Panel"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex-1 flex items-center justify-center text-center p-6 text-gray-500 text-sm">
+                  Market news and headlines feature coming soon.
+                </div>
+              </div>
+            )}
+          </div>
         )}
+
+        {/* Canvas & Content Container */}
+        <div className="relative flex-1 h-full w-full overflow-hidden">
+          {viewMode === 'bubbles' && (
+            <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} displayMode={displayMode} />
+          )}
         {viewMode === 'table' && (
           <div className="absolute inset-0 z-10 bg-black flex flex-col p-2 sm:p-6 md:p-10">
             <div className="flex justify-between items-center mb-4 sm:mb-8 border-b border-gray-800 pb-4">
@@ -1224,6 +1827,7 @@ export default function StockBubbles() {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Mobile Footer with Timeframes */}
