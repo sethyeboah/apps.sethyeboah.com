@@ -246,8 +246,8 @@ export default function StockBubbles() {
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
   const [listHistoricalData, setListHistoricalData] = useState<Record<string, Record<string, number | null>>>({});
-  const wsRef = useRef<WebSocket | null>(null);
 
+  // Synchronize ref with current active timeframe state
   useEffect(() => {
     activeTimeframeRef.current = activeTimeframe;
   }, [activeTimeframe]);
@@ -492,82 +492,11 @@ export default function StockBubbles() {
     return list;
   }, [sectorsData, sectorsSearch, sectorsFilter, sectorsSort]);
 
-  const connectWebSocket = useCallback(() => {
-    const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
-    const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
-    if (!apiKey || !secretKey) return;
-
-    try {
-      const wsUrl = process.env.NEXT_PUBLIC_ALPACA_WS_URL || 'wss://stream.data.alpaca.markets/v2/iex';
-      wsRef.current = new WebSocket(wsUrl);
-
-      wsRef.current.onopen = () => {
-        console.log('Connected to Alpaca WebSocket');
-        wsRef.current?.send(JSON.stringify({
-          action: 'auth',
-          key: apiKey,
-          secret: secretKey
-        }));
-
-        setTimeout(() => {
-          wsRef.current?.send(JSON.stringify({
-            action: 'subscribe',
-            trades: SP500_SYMBOLS,
-            dailyBars: SP500_SYMBOLS
-          }));
-        }, 1000);
-      };
-
-      wsRef.current.onmessage = (event) => {
-        try {
-          const messages = JSON.parse(event.data);
-          if (!Array.isArray(messages)) return;
-
-          setStocks(prevStocks => {
-            let hasUpdates = false;
-            const newStocks = [...prevStocks];
-
-            messages.forEach(msg => {
-              if (msg.S && (msg.T === 't' || msg.T === 'd')) {
-                const idx = newStocks.findIndex(s => s.symbol === msg.S);
-                if (idx !== -1) {
-                  const current = newStocks[idx];
-                  const newPrice = msg.T === 't' ? msg.p : msg.c;
-
-                  let newChange = current.change;
-                  if (activeTimeframeRef.current === 'ATH') {
-                    // For ATH, current.price stores the ATH value
-                    const currentATH = Math.max(current.price, newPrice);
-                    newChange = newPrice !== 0 ? ((currentATH - newPrice) / newPrice) * 100 : 0;
-                  } else {
-                    // Use timeframe-aware baseline
-                    const baseline = current.prevClose || (msg.T === 'd' ? msg.o : newPrice);
-                    newChange = baseline !== 0 ? ((newPrice - baseline) / baseline) * 100 : 0;
-                  }
-
-                  newStocks[idx] = {
-                    ...current,
-                    price: newPrice,
-                    change: newChange
-                  };
-                  hasUpdates = true;
-                }
-              }
-            });
-
-            return hasUpdates ? newStocks : prevStocks;
-          });
-        } catch (error) {
-          console.error('Error parsing WebSocket data:', error);
-        }
-      };
-
-      wsRef.current.onerror = (err) => console.error('WebSocket error:', err);
-      wsRef.current.onclose = () => console.log('WebSocket connection closed');
-    } catch (error) {
-      console.error('Error setting up WebSocket:', error);
-    }
-  }, []);
+  // ---------------------------------------------------------------------------
+  // Alpaca REST API Logic & Polling
+  // Note: All real-time market data is fetched via Alpaca REST API endpoints.
+  // WebSocket streaming has been removed in favor of periodic REST snapshots & polling.
+  // ---------------------------------------------------------------------------
 
   const runOneDayLogic = useCallback(async () => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
@@ -740,14 +669,10 @@ export default function StockBubbles() {
     }
   }, []);
 
-  // Handle persistent setup (initial load and WebSocket)
+  // Handle initial data load on component mount via Alpaca REST API
   useEffect(() => {
     fetchStockData(true);
-    connectWebSocket();
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, [fetchStockData, connectWebSocket]);
+  }, [fetchStockData]);
 
   // Handle polling updates and progress bar, resets whenever activeTimeframe changes
   useEffect(() => {
