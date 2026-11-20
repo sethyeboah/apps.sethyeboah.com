@@ -239,7 +239,8 @@ export default function StockBubbles() {
     activeMenuRef.current = activeMenu;
   }, [activeMenu]);
   const [isTimeframeMenuOpen, setIsTimeframeMenuOpen] = useState(false);
-  const [activeTimeframe, setActiveTimeframe] = useState<string>('1D'); // Default to 1 Day
+  // Default to 'Live' time frame when the app initially loads
+  const [activeTimeframe, setActiveTimeframe] = useState<string>('Live');
   const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
   const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
   const activeTimeframeRef = useRef(activeTimeframe);
@@ -669,6 +670,23 @@ export default function StockBubbles() {
     }
   }, []);
 
+  // Handler function to switch timeframe and trigger appropriate logic
+  const handleTimeframeChange = useCallback((timeframe: string) => {
+    setActiveTimeframe(timeframe);
+    setProgress(0); // Reset polling progress bar immediately
+
+    if (timeframe === 'Live') {
+      // Fetch latest live snapshots across all symbols
+      fetchStockData(false);
+    } else if (timeframe === '1D') {
+      runOneDayLogic();
+    } else if (timeframe === '1H') {
+      runOneHourLogic();
+    } else if (timeframe === 'ATH') {
+      runATHLogic();
+    }
+  }, [fetchStockData, runOneDayLogic, runOneHourLogic, runATHLogic]);
+
   // Handle initial data load on component mount via Alpaca REST API
   useEffect(() => {
     fetchStockData(true);
@@ -687,6 +705,7 @@ export default function StockBubbles() {
       } else if (activeTimeframe === 'ATH') {
         runATHLogic();
       } else {
+        // 'Live' and other timeframes poll latest market snapshot data
         fetchStockData(false);
       }
     }, 15000);
@@ -945,23 +964,21 @@ export default function StockBubbles() {
             </h1>
 
             {/* Timeframe Selector (Desktop Only) */}
-            <div className="hidden md:flex items-center gap-1"> {/* Visible on medium screens and up */}
-              {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
+            <div id="desktop-timeframe-selector" className="hidden md:flex items-center gap-1"> {/* Visible on medium screens and up */}
+              {(['Live', '1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((timeframeOption) => (
                 <button
-                  key={tf}
-                  onClick={() => {
-                    setActiveTimeframe(tf);
-                    setProgress(0);
-                    if (tf === '1D') runOneDayLogic();
-                    if (tf === '1H') runOneHourLogic();
-                    if (tf === 'ATH') runATHLogic();
-                  }}
-                  className={`px-2 py-1 sm:px-3 rounded-md text-xs font-normal transition-colors ${activeTimeframe === tf
+                  key={timeframeOption}
+                  id={`desktop-timeframe-button-${timeframeOption.toLowerCase()}`}
+                  onClick={() => handleTimeframeChange(timeframeOption)}
+                  className={`px-2 py-1 sm:px-3 rounded-md text-xs font-normal transition-colors ${
+                    activeTimeframe === timeframeOption
                       ? 'bg-gray-700 text-white' // Active state styling
                       : 'text-gray-400 hover:text-white hover:bg-gray-800' // Inactive state styling
-                    }`}
+                  }`}
+                  aria-pressed={activeTimeframe === timeframeOption}
+                  title={`Switch timeframe to ${timeframeOption}`}
                 >
-                  {tf}
+                  {timeframeOption}
                 </button>
               ))}
             </div>
@@ -1860,12 +1877,17 @@ export default function StockBubbles() {
       </div>
 
       {/* Mobile Footer with Timeframes */}
-      <div className="md:hidden bg-black p-2 z-20 border-t border-gray-800 shrink-0">
+      <div id="mobile-timeframe-footer" className="md:hidden bg-black p-2 z-20 border-t border-gray-800 shrink-0">
         <div className="flex items-center justify-between px-4">
           <div className="relative">
+            {/* Mobile Timeframe Dropdown Toggle Button */}
             <button
+              id="mobile-timeframe-menu-toggle"
+              type="button"
               onClick={() => setIsTimeframeMenuOpen(!isTimeframeMenuOpen)}
               className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-[10px] font-normal uppercase tracking-widest rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors"
+              aria-expanded={isTimeframeMenuOpen}
+              aria-haspopup="listbox"
             >
               <span>TF: {activeTimeframe}</span>
               <svg className={`w-3 h-3 transition-transform duration-200 ${isTimeframeMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1873,25 +1895,28 @@ export default function StockBubbles() {
               </svg>
             </button>
 
+            {/* Mobile Timeframe Dropdown Menu List */}
             {isTimeframeMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-2 w-32 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-30">
-                {(['1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((tf) => (
+              <div
+                id="mobile-timeframe-dropdown-list"
+                className="absolute bottom-full left-0 mb-2 w-32 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-30"
+              >
+                {(['Live', '1H', '1D', '1W', '1M', '3M', '1Y', 'YTD', 'ATH'] as const).map((timeframeOption) => (
                   <button
-                    key={tf}
+                    key={timeframeOption}
+                    id={`mobile-timeframe-option-${timeframeOption.toLowerCase()}`}
+                    type="button"
                     onClick={() => {
-                      setActiveTimeframe(tf);
-                      setProgress(0);
+                      handleTimeframeChange(timeframeOption);
                       setIsTimeframeMenuOpen(false);
-                      if (tf === '1D') runOneDayLogic();
-                      if (tf === '1H') runOneHourLogic();
-                      if (tf === 'ATH') runATHLogic();
                     }}
-                    className={`w-full text-left px-4 py-2 text-[10px] font-normal uppercase tracking-widest transition-colors ${activeTimeframe === tf
-                        ? 'bg-gray-700 text-white'
+                    className={`w-full text-left px-4 py-2 text-[10px] font-normal uppercase tracking-widest transition-colors ${
+                      activeTimeframe === timeframeOption
+                        ? 'bg-gray-700 text-white font-medium'
                         : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                      }`}
+                    }`}
                   >
-                    {tf}
+                    {timeframeOption}
                   </button>
                 ))}
               </div>
