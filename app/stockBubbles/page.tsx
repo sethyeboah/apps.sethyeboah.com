@@ -655,8 +655,8 @@ export default function StockBubbles() {
           return [...prevStocks, updatedStockItem];
         });
 
-        // Increment counter of redrawn stock bubbles for current run
-        setRedrawnStockCount((prev) => prev + 1);
+        // Increment counter of redrawn stock bubbles, stopping when total stocks reached
+        setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
 
         // Clear error and finish initial loading screen as soon as the first stock loads
         if (isInitial) {
@@ -717,14 +717,27 @@ export default function StockBubbles() {
 
           console.log('oneDayStockPricesAndPercentages:', oneDayStockPricesAndPercentages);
 
-          setStocks(prev => prev.map(s =>
-            s.symbol === symbol
-              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice }
-              : s
-          ));
+          setStocks((prev) => {
+            const updatedStockItem: Stock = {
+              symbol,
+              name: SYMBOL_NAMES[symbol] || symbol,
+              price: currentPrice,
+              change: percentageChangeFromLastToCurrent,
+              prevClose: lastButOneClosingPrice,
+              marketCap: 1000000000000,
+            };
 
-          // Increment counter of redrawn stock bubbles
-          setRedrawnStockCount((prev) => prev + 1);
+            const existingIndex = prev.findIndex((s) => s.symbol === symbol);
+            if (existingIndex >= 0) {
+              const nextList = [...prev];
+              nextList[existingIndex] = updatedStockItem;
+              return nextList;
+            }
+            return [...prev, updatedStockItem];
+          });
+
+          // Increment counter of redrawn stock bubbles, stopping when total stocks reached
+          setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
         }
       } catch (err) {
         console.error(`Error in 1D logic for ${symbol}:`, err);
@@ -777,14 +790,27 @@ export default function StockBubbles() {
 
           console.log('athStockPricesAndPercentages:', athStockPricesAndPercentages);
 
-          setStocks(prev => prev.map(s =>
-            s.symbol === symbol
-              ? { ...s, price: currentPrice, change: percentageChangeToATH, prevClose: athPrice }
-              : s
-          ));
+          setStocks((prev) => {
+            const updatedStockItem: Stock = {
+              symbol,
+              name: SYMBOL_NAMES[symbol] || symbol,
+              price: currentPrice,
+              change: percentageChangeToATH,
+              prevClose: athPrice,
+              marketCap: 1000000000000,
+            };
 
-          // Increment counter of redrawn stock bubbles
-          setRedrawnStockCount((prev) => prev + 1);
+            const existingIndex = prev.findIndex((s) => s.symbol === symbol);
+            if (existingIndex >= 0) {
+              const nextList = [...prev];
+              nextList[existingIndex] = updatedStockItem;
+              return nextList;
+            }
+            return [...prev, updatedStockItem];
+          });
+
+          // Increment counter of redrawn stock bubbles, stopping when total stocks reached
+          setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
         }
       } catch (err) {
         console.error(`Error in ATH logic for ${symbol}:`, err);
@@ -837,14 +863,27 @@ export default function StockBubbles() {
 
           console.log('oneHourStockPricesAndPercentages:', oneHourStockPricesAndPercentages);
 
-          setStocks(prev => prev.map(s =>
-            s.symbol === symbol
-              ? { ...s, price: currentPrice, change: percentageChangeFromLastToCurrent, prevClose: lastButOneClosingPrice }
-              : s
-          ));
+          setStocks((prev) => {
+            const updatedStockItem: Stock = {
+              symbol,
+              name: SYMBOL_NAMES[symbol] || symbol,
+              price: currentPrice,
+              change: percentageChangeFromLastToCurrent,
+              prevClose: lastButOneClosingPrice,
+              marketCap: 1000000000000,
+            };
 
-          // Increment counter of redrawn stock bubbles
-          setRedrawnStockCount((prev) => prev + 1);
+            const existingIndex = prev.findIndex((s) => s.symbol === symbol);
+            if (existingIndex >= 0) {
+              const nextList = [...prev];
+              nextList[existingIndex] = updatedStockItem;
+              return nextList;
+            }
+            return [...prev, updatedStockItem];
+          });
+
+          // Increment counter of redrawn stock bubbles, stopping when total stocks reached
+          setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
         }
       } catch (err) {
         console.error(`Error in 1H logic for ${symbol}:`, err);
@@ -858,9 +897,12 @@ export default function StockBubbles() {
     setProgress(0); // Reset polling progress bar immediately
     setRedrawnStockCount(0); // Reset redrawn bubble counter every time a new timeframe is selected
 
+    // Clear all stock bubbles from the canvas before starting redraw for the selected timeframe
+    setStocks([]);
+
     if (timeframe === 'Live') {
-      // Allow clearing canvas again when user explicitly selects Live
-      hasClearedCanvasForLiveRef.current = false;
+      // Mark canvas as cleared so the subsequent live iteration populates bubbles cleanly
+      hasClearedCanvasForLiveRef.current = true;
       // Trigger live stock prices and percentages calculation
       liveStockPricesAndPercentages();
     } else if (timeframe === '1D') {
