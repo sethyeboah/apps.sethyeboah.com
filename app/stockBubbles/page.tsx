@@ -222,6 +222,9 @@ export default function StockBubbles() {
   // Counter state: Number of stock bubbles redrawn out of total stocks
   const [redrawnStockCount, setRedrawnStockCount] = useState<number>(0);
 
+  // Timestamp of the most recent stock data/bubble update
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+
   // Sector Performance States
   const [sectorsData, setSectorsData] = useState<SectorPerformance[]>([]);
   const [sectorsLoading, setSectorsLoading] = useState(false);
@@ -306,6 +309,7 @@ export default function StockBubbles() {
       });
 
       setStocks(updatedStocks);
+      setLastUpdateTime(new Date());
       setError(null);
       if (isInitial) {
         setLoading(false);
@@ -684,6 +688,9 @@ export default function StockBubbles() {
         // Increment counter of redrawn stock bubbles, stopping when total stocks reached
         setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
 
+        // Update the timestamp of the last data update
+        setLastUpdateTime(new Date());
+
         // Clear error and finish initial loading screen as soon as the first stock loads
         if (isInitial) {
           setError(null);
@@ -775,6 +782,9 @@ export default function StockBubbles() {
 
           // Increment counter of redrawn stock bubbles, stopping when total stocks reached
           setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
+
+          // Update the timestamp of the last data update
+          setLastUpdateTime(new Date());
         }
       } catch (err: any) {
         if (err?.name === 'AbortError' || signal?.aborted) {
@@ -859,6 +869,9 @@ export default function StockBubbles() {
 
           // Increment counter of redrawn stock bubbles, stopping when total stocks reached
           setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
+
+          // Update the timestamp of the last data update
+          setLastUpdateTime(new Date());
         }
       } catch (err: any) {
         if (err?.name === 'AbortError' || signal?.aborted) {
@@ -943,6 +956,9 @@ export default function StockBubbles() {
 
           // Increment counter of redrawn stock bubbles, stopping when total stocks reached
           setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
+
+          // Update the timestamp of the last data update
+          setLastUpdateTime(new Date());
         }
       } catch (err: any) {
         if (err?.name === 'AbortError' || signal?.aborted) {
@@ -1904,7 +1920,31 @@ export default function StockBubbles() {
         {/* Canvas & Content Container */}
         <div className="relative flex-1 h-full w-full overflow-hidden">
           {viewMode === 'bubbles' && (
-            <BubbleCanvas stocks={stocks} onStockSelect={setSelectedStock} searchTerm={searchTerm} displayMode={displayMode} />
+            <>
+              {/* Bubble Canvas with bottom-right exclusion zone (180px x 36px) so bubbles bounce off the box and never render behind it */}
+              <BubbleCanvas
+                stocks={stocks}
+                onStockSelect={setSelectedStock}
+                searchTerm={searchTerm}
+                displayMode={displayMode}
+                exclusionZone={lastUpdateTime ? { width: 180, height: 36 } : undefined}
+              />
+
+              {/* Last Update Time Indicator Box - Located in the absolute bottom right corner */}
+              {lastUpdateTime && (
+                <div
+                  id="canvas-last-update-box"
+                  className="absolute bottom-0 right-0 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-black border-t border-l border-gray-800 text-[11px] font-mono text-gray-400 select-none"
+                  title={`Last updated at ${lastUpdateTime.toLocaleTimeString()}`}
+                  aria-label="Last update time"
+                >
+                  {/* Status dot indicator */}
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                  <span className="text-gray-500 uppercase tracking-wider text-[9px] font-semibold">Updated:</span>
+                  <span className="text-gray-200">{lastUpdateTime.toLocaleTimeString()}</span>
+                </div>
+              )}
+            </>
           )}
         {viewMode === 'table' && (
           <div className="absolute inset-0 z-10 bg-black flex flex-col p-2 sm:p-6 md:p-10">

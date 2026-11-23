@@ -26,14 +26,31 @@ interface BubbleCanvasProps {
   onStockSelect: (stock: Stock) => void;
   searchTerm?: string;
   displayMode?: 'change' | 'price';
+  /**
+   * Optional exclusion zone (e.g. bottom-right timestamp box) in logical pixels { width, height }
+   * where bubbles are prevented from entering or rendering behind.
+   */
+  exclusionZone?: { width: number; height: number };
 }
 
-export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', displayMode = 'change' }: BubbleCanvasProps) {
+export default function BubbleCanvas({
+  stocks,
+  onStockSelect,
+  searchTerm = '',
+  displayMode = 'change',
+  exclusionZone,
+}: BubbleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bubblesRef = useRef<Bubble[]>([]);
   const searchTermRef = useRef(searchTerm);
   const displayModeRef = useRef(displayMode);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
+  const exclusionZoneRef = useRef(exclusionZone);
+
+  // Keep exclusionZoneRef updated
+  useEffect(() => {
+    exclusionZoneRef.current = exclusionZone;
+  }, [exclusionZone]);
 
   // Keep searchTermRef updated without re-triggering the main animation effect
   useEffect(() => {
@@ -113,7 +130,31 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
     bubblesRef.current = bubbles;
 
     const resolveCollisions = (iterations = 15) => {
+      const zone = exclusionZoneRef.current;
+      const hasZone = !!(zone && zone.width > 0 && zone.height > 0);
+      const zoneLeft = hasZone ? logicalWidth - zone!.width : 0;
+      const zoneTop = hasZone ? logicalHeight - zone!.height : 0;
+
       for (let i = 0; i < iterations; i++) {
+        // Enforce exclusion zone boundaries during collision resolution
+        if (hasZone) {
+          for (let j = 0; j < bubbles.length; j++) {
+            const b = bubbles[j];
+            const closestX = Math.max(zoneLeft, Math.min(b.x, logicalWidth));
+            const closestY = Math.max(zoneTop, Math.min(b.y, logicalHeight));
+            const distX = b.x - closestX;
+            const distY = b.y - closestY;
+            const distSq = distX * distX + distY * distY;
+
+            if (distSq < b.radius * b.radius) {
+              const dist = Math.sqrt(distSq) || 0.1;
+              const overlap = b.radius - dist;
+              b.x += (distX / dist) * overlap;
+              b.y += (distY / dist) * overlap;
+            }
+          }
+        }
+
         for (let j = 0; j < bubbles.length; j++) {
           for (let k = j + 1; k < bubbles.length; k++) {
             const b1 = bubbles[j];
@@ -526,6 +567,40 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
 
           if (b.y - b.radius < 0) { b.y = b.radius; b.vy = Math.abs(b.vy) * 0.7; }
           else if (b.y + b.radius > logicalHeight) { b.y = logicalHeight - b.radius; b.vy = -Math.abs(b.vy) * 0.7; }
+
+          // Collision resolution with bottom-right exclusion box (Last Update Time Box)
+          // Prevents any stock bubble from ever passing behind the box
+          const zone = exclusionZoneRef.current;
+          if (zone && zone.width > 0 && zone.height > 0) {
+            const zoneLeft = logicalWidth - zone.width;
+            const zoneTop = logicalHeight - zone.height;
+
+            // Find closest point on the rectangular exclusion zone to the bubble center
+            const closestX = Math.max(zoneLeft, Math.min(b.x, logicalWidth));
+            const closestY = Math.max(zoneTop, Math.min(b.y, logicalHeight));
+
+            const distX = b.x - closestX;
+            const distY = b.y - closestY;
+            const distSq = distX * distX + distY * distY;
+
+            // If bubble overlaps the exclusion rectangle boundary
+            if (distSq < b.radius * b.radius) {
+              const dist = Math.sqrt(distSq) || 0.1;
+              const overlap = b.radius - dist;
+              const normalX = distX / dist;
+              const normalY = distY / dist;
+
+              // Push the bubble out of the exclusion zone
+              b.x += normalX * overlap;
+              b.y += normalY * overlap;
+
+              // Deflect velocities away from the exclusion box with damping
+              if (b.vx * normalX + b.vy * normalY < 0) {
+                b.vx = (b.vx - 2 * (b.vx * normalX) * normalX) * 0.7;
+                b.vy = (b.vy - 2 * (b.vy * normalY) * normalY) * 0.7;
+              }
+            }
+          }
 
           // Ambient motion
           b.vx += (Math.random() - 0.5) * 0.05;
