@@ -527,19 +527,28 @@ export default function StockBubbles() {
 
   /**
    * liveStockPricesAndPercentages:
-   * Handles calculating and updating percentage changes and prices for each stock when "Live" is selected.
-   * Steps performed:
-   *  1. Clear/remove all stock bubbles in the canvas ONLY ONCE (not on subsequent auto-refresh cycles).
-   *  2. Iterates through each stock in SP500_SYMBOLS:
-   *     a. Queries Alpaca 1D bars (end: now - 16 min, start: 30 days ago, limit=30, raw, feed=sip, desc)
-   *        and retrieves the most recent 1-day close as lastDaysClose.
-   *     b. Queries Alpaca 1Min bars (end: now - 16 min, start: 4 days ago, limit=100, adjustment=all, feed=sip, desc)
-   *        and retrieves the most recent 1-minute close as currentPrice.
-   *     c. Computes percentageChangeFromLastToCurrent = ((currentPrice - lastDaysClose) / lastDaysClose) * 100.
-   *     d. Stores { symbol, lastDaysClose, percentageChangeFromLastToCurrent } in liveStockPricesAndPercentages.
-   *     e. Logs liveStockPricesAndPercentages to console.
-   *     f. Redraws bubble for stock with size per percentageChangeFromLastToCurrent,
-   *        displaying lastDaysClose as price and percentageChangeFromLastToCurrent as percentage.
+   * Function executed when "Live" timeframe is selected.
+   * Performs real-time calculation and redraws of stock bubbles.
+   *
+   * Lifecycle & Iteration Steps:
+   *  1. Ends all existing and pending API calls via AbortController signal.
+   *  2. Clears all stock bubbles in the canvas only once on entry.
+   *  3. Runs an endless while loop that breaks only when active timeframe changes or abort signal is received.
+   *  4. Inside, runs a 60-second iteration loop (breaks after 60s or when timeframe changes).
+   *  5. Iterates through the stock list (retrying failed tickers first, then the rest):
+   *     a. Fetches 1D bar close (start: 30 days ago, end: now - 16 min, limit 30, adjustment all, feed sip, desc) -> lastDaysClose.
+   *     b. Fetches 1Min bar close (start: 5 days ago, end: now - 16 min, limit 100, adjustment all, feed sip, desc) -> currentPrice.
+   *     c. On error: records ticker in failedAPICallTickers array, logs to console, and moves to next stock.
+   *     d. Computes percentage change: ((currentPrice - lastDaysClose) / lastDaysClose) * 100 -> percentageChangeFromLastToCurrent.
+   *     e. Stores { symbol, lastDaysClose, percentageChangeFromLastToCurrent } in liveStockPricesAndPercentages array.
+   *     f. Prints liveStockPricesAndPercentages array to console.
+   *     g. Redraws the bubble with size per percentageChangeFromLastToCurrent.
+   *     h. Increments redrawn counter by 1 (up to total stocks).
+   *     i. Displays lastDaysClose as bubble price.
+   *     j. Displays percentageChangeFromLastToCurrent as bubble percentage.
+   *     k. Repeats until all stocks in current pass are processed.
+   *  6. In subsequent 60-second sequences, retries failed tickers first before other stocks.
+   *  7. Updates the timestamp in the Last Update Time Indicator Box.
    */
   const liveStockPricesAndPercentages = useCallback(async (isInitial = false, signal?: AbortSignal) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
@@ -553,156 +562,204 @@ export default function StockBubbles() {
       return;
     }
 
-    // Step 1: Canvas of bubbles is cleared before redrawing
+    // Step 1: Any prior pending API calls were aborted by the controller before this function was invoked.
+    if (signal?.aborted) return;
+
+    // Step 2: Clear all stock bubbles in the canvas ONLY ONCE
     setStocks([]);
     hasClearedCanvasForLiveRef.current = true;
 
-    // Array to hold the live stock prices and calculated percentage changes
-    const liveStockPricesAndPercentagesArray: Array<{
-      symbol: string;
-      lastDaysClose: number;
-      percentageChangeFromLastToCurrent: number;
-    }> = [];
+    // Helper sleep utility that respects abort signal cancellations immediately
+    const sleepWithAbort = (ms: number) =>
+      new Promise<void>((resolve) => {
+        if (signal?.aborted) return resolve();
+        const timer = setTimeout(() => resolve(), ms);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          resolve();
+        }, { once: true });
+      });
 
-    // Calculate dynamic timestamps:
-    // End time: current time minus 16 minutes
-    const now = new Date();
-    const endTime = new Date(now.getTime() - 16 * 60 * 1000);
-    const endStr = endTime.toISOString();
+    // Array to record tickers whose API calls fail, for retrying in the subsequent 60-second sequence
+    let failedAPICallTickers: string[] = [];
 
-    // Start time for 1D bars: 30 days ago from end time
-    const thirtyDaysAgo = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const start30DaysStr = thirtyDaysAgo.toISOString();
+    // Step 3: Endless while loop which only breaks when a new timeframe is selected (or component unmounts)
+    while (!signal?.aborted && activeTimeframeRef.current === 'Live') {
+      const loopStartTime = Date.now();
+      const SIXTY_SECONDS_MS = 60 * 1000;
 
-    // Start time for 1Min bars: 4 days ago from end time
-    const fourDaysAgo = new Date(endTime.getTime() - 4 * 24 * 60 * 60 * 1000);
-    const start4DaysStr = fourDaysAgo.toISOString();
+      // Step 6: Determine execution queue for this 60-second sequence:
+      // First retry any failed tickers from previous pass, followed by remaining tickers
+      let symbolsToProcess: string[];
+      if (failedAPICallTickers.length > 0) {
+        const failedSet = new Set(failedAPICallTickers);
+        const remainingSymbols = SP500_SYMBOLS.filter((s) => !failedSet.has(s));
+        symbolsToProcess = [...failedAPICallTickers, ...remainingSymbols];
+      } else {
+        symbolsToProcess = [...SP500_SYMBOLS];
+      }
 
-    // Iterate through each stock in the list of stocks
-    for (const symbol of SP500_SYMBOLS) {
-      // Abort immediately if timeframe changed or signal aborted
-      if (signal?.aborted) return;
+      // Reset failed tickers list for the new sequence pass
+      failedAPICallTickers = [];
 
-      try {
-        // Step 2: Get most recent one day close (1D bar, desc)
-        // End time = current time minus 16 minutes, Start time = 30 days ago
-        const dailyUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1D&start=${start30DaysStr}&end=${endStr}&limit=30&adjustment=all&feed=sip&sort=desc`;
-        const dailyResponse = await fetch(dailyUrl, {
-          headers: {
-            'APCA-API-KEY-ID': apiKey,
-            'APCA-API-SECRET-KEY': secretKey,
-          },
-          signal,
-        });
+      // Array holding stock prices and percentage changes for logging
+      const liveStockPricesAndPercentagesArray: Array<{
+        symbol: string;
+        lastDaysClose: number;
+        percentageChangeFromLastToCurrent: number;
+      }> = [];
 
-        if (signal?.aborted) return;
-
-        if (!dailyResponse.ok) {
-          console.error(`Failed to fetch 1D bar for ${symbol}: HTTP ${dailyResponse.status}`);
-          continue;
+      // Step 4: Inner loop that breaks after 60 seconds or if a new timeframe is selected
+      for (const symbol of symbolsToProcess) {
+        // Break out immediately if new timeframe selected or aborted
+        if (signal?.aborted || activeTimeframeRef.current !== 'Live') {
+          break;
         }
 
-        const dailyData = await dailyResponse.json();
-        if (signal?.aborted) return;
-
-        const dailyBars = dailyData.bars?.[symbol];
-        if (!dailyBars || dailyBars.length === 0) {
-          console.warn(`No 1D bars found for ${symbol}`);
-          continue;
+        // Break out of current stock iteration if 60 seconds have elapsed
+        if (Date.now() - loopStartTime >= SIXTY_SECONDS_MS) {
+          console.log('60 seconds elapsed in live sequence; breaking into next sequence.');
+          break;
         }
 
-        // With sort=desc, index 0 is the most recent daily bar
-        const lastDaysClose: number = dailyBars[0].c;
+        try {
+          // Dynamic timestamps for API queries:
+          // End time: current time minus 16 minutes
+          const now = new Date();
+          const endTime = new Date(now.getTime() - 16 * 60 * 1000);
+          const endStr = endTime.toISOString();
 
-        // Step 3: Get most recent close from 1Min bars (1Min, desc)
-        // End time = current time minus 16 minutes, Start time = 4 days ago
-        const minuteUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Min&start=${start4DaysStr}&end=${endStr}&limit=100&adjustment=all&feed=sip&sort=desc`;
-        const minuteResponse = await fetch(minuteUrl, {
-          headers: {
-            'APCA-API-KEY-ID': apiKey,
-            'APCA-API-SECRET-KEY': secretKey,
-          },
-          signal,
-        });
+          // Start time for 1D bars: 30 days ago from end time
+          const thirtyDaysAgo = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000);
+          const start30DaysStr = thirtyDaysAgo.toISOString();
 
-        if (signal?.aborted) return;
+          // Start time for 1Min bars: 5 days ago from end time
+          const fiveDaysAgo = new Date(endTime.getTime() - 5 * 24 * 60 * 60 * 1000);
+          const start5DaysStr = fiveDaysAgo.toISOString();
 
-        if (!minuteResponse.ok) {
-          console.error(`Failed to fetch 1Min bar for ${symbol}: HTTP ${minuteResponse.status}`);
-          continue;
-        }
+          // Step 5a: Get most recent one day close (1D bar, desc)
+          const dailyUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1D&start=${start30DaysStr}&end=${endStr}&limit=30&adjustment=all&feed=sip&sort=desc`;
+          const dailyResponse = await fetch(dailyUrl, {
+            headers: {
+              'APCA-API-KEY-ID': apiKey,
+              'APCA-API-SECRET-KEY': secretKey,
+            },
+            signal,
+          });
 
-        const minuteData = await minuteResponse.json();
-        if (signal?.aborted) return;
+          if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
 
-        const minuteBars = minuteData.bars?.[symbol];
-        if (!minuteBars || minuteBars.length === 0) {
-          console.warn(`No 1Min bars found for ${symbol}`);
-          continue;
-        }
-
-        // With sort=desc, index 0 is the most recent minute bar
-        const currentPrice: number = minuteBars[0].c;
-
-        // Step 4: Calculate percentage change from lastDaysClose to currentPrice
-        const percentageChangeFromLastToCurrent: number =
-          lastDaysClose !== 0
-            ? ((currentPrice - lastDaysClose) / lastDaysClose) * 100
-            : 0;
-
-        // Step 5: Store in liveStockPricesAndPercentages array
-        liveStockPricesAndPercentagesArray.push({
-          symbol,
-          lastDaysClose,
-          percentageChangeFromLastToCurrent,
-        });
-
-        // Step 6: Print to console the array liveStockPricesAndPercentages
-        console.log('liveStockPricesAndPercentages:', liveStockPricesAndPercentagesArray);
-
-        if (signal?.aborted) return;
-
-        // Steps 7, 8, 9:
-        // Redraw the bubble for the stock being iterated:
-        // - change is set to percentageChangeFromLastToCurrent (drives bubble size & % text)
-        // - price is set to lastDaysClose (drives bubble price text)
-        setStocks((prevStocks) => {
-          const updatedStockItem: Stock = {
-            symbol,
-            name: SYMBOL_NAMES[symbol] || symbol,
-            price: lastDaysClose, // Step 8: Change price in bubble to lastDaysClose
-            change: percentageChangeFromLastToCurrent, // Step 7 & 9: Change percentage & size to percentageChangeFromLastToCurrent
-            prevClose: lastDaysClose,
-            marketCap: 1000000000000,
-          };
-
-          const existingIndex = prevStocks.findIndex((s) => s.symbol === symbol);
-          if (existingIndex >= 0) {
-            const nextList = [...prevStocks];
-            nextList[existingIndex] = updatedStockItem;
-            return nextList;
+          if (!dailyResponse.ok) {
+            throw new Error(`Daily bars request failed for ${symbol}: HTTP ${dailyResponse.status}`);
           }
-          return [...prevStocks, updatedStockItem];
-        });
 
-        // Increment counter of redrawn stock bubbles, stopping when total stocks reached
-        setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
+          const dailyData = await dailyResponse.json();
+          if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
 
-        // Update the timestamp of the last data update
-        setLastUpdateTime(new Date());
+          const dailyBars = dailyData.bars?.[symbol];
+          if (!dailyBars || dailyBars.length === 0) {
+            throw new Error(`No 1D bars found for ${symbol}`);
+          }
 
-        // Clear error and finish initial loading screen as soon as the first stock loads
-        if (isInitial) {
-          setError(null);
-          setLoading(false);
+          // With sort=desc, index 0 is the most recent daily bar
+          const lastDaysClose: number = dailyBars[0].c;
+
+          // Step 5b: Get most recent close from 1Min bars (1Min, desc, 5 days ago start)
+          const minuteUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Min&start=${start5DaysStr}&end=${endStr}&limit=100&adjustment=all&feed=sip&sort=desc`;
+          const minuteResponse = await fetch(minuteUrl, {
+            headers: {
+              'APCA-API-KEY-ID': apiKey,
+              'APCA-API-SECRET-KEY': secretKey,
+            },
+            signal,
+          });
+
+          if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
+
+          if (!minuteResponse.ok) {
+            throw new Error(`Minute bars request failed for ${symbol}: HTTP ${minuteResponse.status}`);
+          }
+
+          const minuteData = await minuteResponse.json();
+          if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
+
+          const minuteBars = minuteData.bars?.[symbol];
+          if (!minuteBars || minuteBars.length === 0) {
+            throw new Error(`No 1Min bars found for ${symbol}`);
+          }
+
+          // With sort=desc, index 0 is the most recent minute bar
+          const currentPrice: number = minuteBars[0].c;
+
+          // Step 5d: Calculate percentage change from lastDaysClose to currentPrice
+          const percentageChangeFromLastToCurrent: number =
+            lastDaysClose !== 0
+              ? ((currentPrice - lastDaysClose) / lastDaysClose) * 100
+              : 0;
+
+          // Step 5e: Store in liveStockPricesAndPercentages array
+          liveStockPricesAndPercentagesArray.push({
+            symbol,
+            lastDaysClose,
+            percentageChangeFromLastToCurrent,
+          });
+
+          // Step 5f: Print to console the array liveStockPricesAndPercentages
+          console.log('liveStockPricesAndPercentages:', liveStockPricesAndPercentagesArray);
+
+          if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
+
+          // Step 5g, 5i, 5j: Redraw bubble with updated price (lastDaysClose) and percentage (percentageChangeFromLastToCurrent)
+          setStocks((prevStocks) => {
+            const updatedStockItem: Stock = {
+              symbol,
+              name: SYMBOL_NAMES[symbol] || symbol,
+              price: lastDaysClose,
+              change: percentageChangeFromLastToCurrent,
+              prevClose: lastDaysClose,
+              marketCap: 1000000000000,
+            };
+
+            const existingIndex = prevStocks.findIndex((s) => s.symbol === symbol);
+            if (existingIndex >= 0) {
+              const nextList = [...prevStocks];
+              nextList[existingIndex] = updatedStockItem;
+              return nextList;
+            }
+            return [...prevStocks, updatedStockItem];
+          });
+
+          // Step 5h: Increase redrawn counter by 1 unless already at total stocks
+          setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
+
+          // Step 7: Update time in the Last Update Time Indicator Box
+          setLastUpdateTime(new Date());
+
+          if (isInitial) {
+            setError(null);
+            setLoading(false);
+          }
+        } catch (stockError: any) {
+          if (stockError?.name === 'AbortError' || signal?.aborted || activeTimeframeRef.current !== 'Live') {
+            return;
+          }
+
+          // Step 5c: If API call fails, record ticker in failedAPICallTickers, print to console, and proceed to next stock
+          if (!failedAPICallTickers.includes(symbol)) {
+            failedAPICallTickers.push(symbol);
+          }
+          console.warn(`Error processing live data for ${symbol}:`, stockError?.message || stockError);
+          console.log('failedAPICallTickers:', failedAPICallTickers);
         }
-      } catch (stockError: any) {
-        if (stockError?.name === 'AbortError' || signal?.aborted) {
-          return;
-        }
-        console.error(`Error processing live data for ${symbol}:`, stockError);
+      }
+
+      // Check if 60 seconds have elapsed; if not, wait out the remainder of the 60s window before starting next sequence
+      const elapsed = Date.now() - loopStartTime;
+      if (elapsed < SIXTY_SECONDS_MS && !signal?.aborted && activeTimeframeRef.current === 'Live') {
+        await sleepWithAbort(SIXTY_SECONDS_MS - elapsed);
       }
     }
+
     if (isInitial) {
       setLoading(false);
     }
