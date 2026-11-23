@@ -11,6 +11,7 @@ interface Stock {
   change: number;
   marketCap: number;
   prevClose?: number;
+  lastUpdated?: Date; // Timestamp when this stock's data was last updated
 }
 
 const SYMBOL_NAMES: Record<string, string> = {
@@ -297,6 +298,8 @@ export default function StockBubbles() {
         const price = snapshot?.latestTrade?.p || 0;
         const prevClose = snapshot?.prevDailyBar?.c || price;
         const change = prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : 0;
+        // Set initial lastUpdated time for each stock
+        const currentUpdateTime = new Date();
 
         return {
           symbol,
@@ -304,7 +307,8 @@ export default function StockBubbles() {
           price,
           change,
           prevClose,
-          marketCap: 1000000000000
+          marketCap: 1000000000000,
+          lastUpdated: currentUpdateTime // Store the initial update time for this stock
         };
       });
 
@@ -546,7 +550,8 @@ export default function StockBubbles() {
    *     h. Increments redrawn counter by 1 (up to total stocks).
    *     i. Displays lastDaysClose as bubble price.
    *     j. Displays percentageChangeFromLastToCurrent as bubble percentage.
-   *     k. Repeats until all stocks in current pass are processed.
+   *     k. Updates the lastUpdated timestamp for this stock in the stock modal.
+   *     l. Repeats until all stocks in current pass are processed.
    *  6. In subsequent 60-second sequences, retries failed tickers first before other stocks.
    *  7. Updates the timestamp in the Last Update Time Indicator Box.
    */
@@ -710,6 +715,8 @@ export default function StockBubbles() {
           if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
 
           // Step 5g, 5i, 5j: Redraw bubble with updated price (lastDaysClose) and percentage (percentageChangeFromLastToCurrent)
+          // Step 5k: Update the Last Updated Time for this specific stock in the modal
+          const currentUpdateTime = new Date();
           setStocks((prevStocks) => {
             const updatedStockItem: Stock = {
               symbol,
@@ -718,6 +725,7 @@ export default function StockBubbles() {
               change: percentageChangeFromLastToCurrent,
               prevClose: lastDaysClose,
               marketCap: 1000000000000,
+              lastUpdated: currentUpdateTime, // Store the update time for this stock
             };
 
             const existingIndex = prevStocks.findIndex((s) => s.symbol === symbol);
@@ -786,6 +794,7 @@ export default function StockBubbles() {
    *     g. Increments redrawn counter by 1 (up to total stocks).
    *     h. Displays lastDaysClose as bubble price.
    *     i. Displays percentageChangeFromLastToCurrent as bubble percentage.
+   *    j. Updates the lastUpdated timestamp for this stock in the stock modal.
    *     j. Repeats until all stocks in current pass are processed.
    *  6. In subsequent 60-second sequences, retries failed tickers first before other stocks.
    *  7. Updates the timestamp in the Last Update Time Indicator Box.
@@ -915,6 +924,8 @@ export default function StockBubbles() {
           if (signal?.aborted || activeTimeframeRef.current !== '1D') break;
 
           // Step 5f, 5h, 5i: Redraw bubble with updated price (lastDaysClose) and percentage (percentageChangeFromLastToCurrent)
+          // Step 5j: Update the Last Updated Time for this specific stock in the modal
+          const currentUpdateTime = new Date();
           setStocks((prevStocks) => {
             const updatedStockItem: Stock = {
               symbol,
@@ -923,6 +934,7 @@ export default function StockBubbles() {
               change: percentageChangeFromLastToCurrent,      // Step 5i: bubble percentage = percentageChangeFromLastToCurrent
               prevClose: lastDaysClose,
               marketCap: 1000000000000,
+              lastUpdated: currentUpdateTime, // Store the update time for this stock
             };
 
             const existingIndex = prevStocks.findIndex((s) => s.symbol === symbol);
@@ -1015,6 +1027,8 @@ export default function StockBubbles() {
           if (signal?.aborted) return;
 
           setStocks((prev) => {
+            // Update the Last Updated Time for this specific stock in the modal
+            const currentUpdateTime = new Date();
             const updatedStockItem: Stock = {
               symbol,
               name: SYMBOL_NAMES[symbol] || symbol,
@@ -1022,6 +1036,7 @@ export default function StockBubbles() {
               change: percentageChangeToATH,
               prevClose: athPrice,
               marketCap: 1000000000000,
+              lastUpdated: currentUpdateTime, // Store the update time for this stock
             };
 
             const existingIndex = prev.findIndex((s) => s.symbol === symbol);
@@ -1102,6 +1117,8 @@ export default function StockBubbles() {
           if (signal?.aborted) return;
 
           setStocks((prev) => {
+            // Update the Last Updated Time for this specific stock in the modal
+            const currentUpdateTime = new Date();
             const updatedStockItem: Stock = {
               symbol,
               name: SYMBOL_NAMES[symbol] || symbol,
@@ -1109,6 +1126,7 @@ export default function StockBubbles() {
               change: percentageChangeFromLastToCurrent,
               prevClose: lastButOneClosingPrice,
               marketCap: 1000000000000,
+              lastUpdated: currentUpdateTime, // Store the update time for this stock
             };
 
             const existingIndex = prev.findIndex((s) => s.symbol === symbol);
@@ -2380,6 +2398,23 @@ export default function StockBubbles() {
                     Market Cap: ${(selectedStock.marketCap / 1000000000000).toFixed(2)}T
                   </p>
                 </div>
+
+                {/* Last Update Time for this specific stock - displayed at bottom center of modal */}
+                {selectedStock.lastUpdated && (
+                  <div
+                    id="stock-modal-last-update"
+                    className="pt-4 text-center border-t border-gray-800 mt-4"
+                    aria-label="Stock data last update time"
+                  >
+                    <span className="text-gray-500 text-[10px] font-normal uppercase tracking-widest block mb-0.5">
+                      Last Updated
+                    </span>
+                    <span className="text-gray-300 text-sm font-mono">
+                      {selectedStock.lastUpdated.toLocaleTimeString()}
+                    </span>
+                  </div>
+                )}
+
               </div>
             </div>
           </div>

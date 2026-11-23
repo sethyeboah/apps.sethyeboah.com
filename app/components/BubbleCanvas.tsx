@@ -8,6 +8,7 @@ interface Stock {
   price: number;
   change: number;
   marketCap: number;
+  lastUpdated?: Date; // Timestamp when this stock's data was last updated
 }
 
 interface Bubble {
