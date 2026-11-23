@@ -247,6 +247,10 @@ export default function StockBubbles() {
   const [displayMode, setDisplayMode] = useState<'change' | 'price'>('change');
   const [listFilter, setListFilter] = useState<'all' | 'gainers' | 'losers'>('all');
   const activeTimeframeRef = useRef(activeTimeframe);
+
+  // AbortController ref to cancel any pending API calls whenever a timeframe changes or on unmount
+  const timeframeAbortControllerRef = useRef<AbortController | null>(null);
+
   const [listLoading, setListLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState<Record<string, number | null>>({});
   const [listHistoricalData, setListHistoricalData] = useState<Record<string, Record<string, number | null>>>({});
@@ -256,7 +260,7 @@ export default function StockBubbles() {
     activeTimeframeRef.current = activeTimeframe;
   }, [activeTimeframe]);
 
-  const fetchStockData = useCallback(async (isInitial = false) => {
+  const fetchStockData = useCallback(async (isInitial = false, signal?: AbortSignal) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     try {
@@ -268,17 +272,22 @@ export default function StockBubbles() {
         return;
       }
 
+      if (signal?.aborted) return;
+
       const symbols = SP500_SYMBOLS.join(',');
       const response = await fetch(`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols}`, {
         headers: {
           'APCA-API-KEY-ID': apiKey,
           'APCA-API-SECRET-KEY': secretKey,
-        }
+        },
+        signal,
       });
 
+      if (signal?.aborted) return;
       if (!response.ok) throw new Error('Failed to fetch market snapshots');
 
       const snapshots = await response.json();
+      if (signal?.aborted) return;
 
       const updatedStocks: Stock[] = SP500_SYMBOLS.map(symbol => {
         const snapshot = snapshots[symbol];
@@ -301,7 +310,11 @@ export default function StockBubbles() {
       if (isInitial) {
         setLoading(false);
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || signal?.aborted) {
+        // Request was aborted due to timeframe switch, ignore cleanly
+        return;
+      }
       console.error('Error fetching market snapshots:', err);
       if (isInitial) {
         // Automatically retry after 2 seconds if initial fetch fails
@@ -516,7 +529,7 @@ export default function StockBubbles() {
    *  2. Iterates through each stock in SP500_SYMBOLS:
    *     a. Queries Alpaca 1D bars (end: now - 16 min, start: 30 days ago, limit=30, raw, feed=sip, desc)
    *        and retrieves the most recent 1-day close as lastDaysClose.
-   *     b. Queries Alpaca 1Min bars (end: now - 16 min, start: 1 day ago, limit=100, adjustment=all, feed=sip, desc)
+   *     b. Queries Alpaca 1Min bars (end: now - 16 min, start: 4 days ago, limit=100, adjustment=all, feed=sip, desc)
    *        and retrieves the most recent 1-minute close as currentPrice.
    *     c. Computes percentageChangeFromLastToCurrent = ((currentPrice - lastDaysClose) / lastDaysClose) * 100.
    *     d. Stores { symbol, lastDaysClose, percentageChangeFromLastToCurrent } in liveStockPricesAndPercentages.
@@ -524,7 +537,7 @@ export default function StockBubbles() {
    *     f. Redraws bubble for stock with size per percentageChangeFromLastToCurrent,
    *        displaying lastDaysClose as price and percentageChangeFromLastToCurrent as percentage.
    */
-  const liveStockPricesAndPercentages = useCallback(async (isInitial = false) => {
+  const liveStockPricesAndPercentages = useCallback(async (isInitial = false, signal?: AbortSignal) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     if (!apiKey || !secretKey) {
@@ -536,11 +549,9 @@ export default function StockBubbles() {
       return;
     }
 
-    // Step 1: Remove all stock bubbles in the canvas ONLY ONCE (not after every refresh)
-    if (!hasClearedCanvasForLiveRef.current) {
-      setStocks([]);
-      hasClearedCanvasForLiveRef.current = true;
-    }
+    // Step 1: Canvas of bubbles is cleared before redrawing
+    setStocks([]);
+    hasClearedCanvasForLiveRef.current = true;
 
     // Array to hold the live stock prices and calculated percentage changes
     const liveStockPricesAndPercentagesArray: Array<{
@@ -559,12 +570,15 @@ export default function StockBubbles() {
     const thirtyDaysAgo = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000);
     const start30DaysStr = thirtyDaysAgo.toISOString();
 
-    // Start time for 1Min bars: 1 day ago from end time
-    const oneDayAgo = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
-    const start1DayStr = oneDayAgo.toISOString();
+    // Start time for 1Min bars: 4 days ago from end time
+    const fourDaysAgo = new Date(endTime.getTime() - 4 * 24 * 60 * 60 * 1000);
+    const start4DaysStr = fourDaysAgo.toISOString();
 
     // Iterate through each stock in the list of stocks
     for (const symbol of SP500_SYMBOLS) {
+      // Abort immediately if timeframe changed or signal aborted
+      if (signal?.aborted) return;
+
       try {
         // Step 2: Get most recent one day close (1D bar, desc)
         // End time = current time minus 16 minutes, Start time = 30 days ago
@@ -574,7 +588,10 @@ export default function StockBubbles() {
             'APCA-API-KEY-ID': apiKey,
             'APCA-API-SECRET-KEY': secretKey,
           },
+          signal,
         });
+
+        if (signal?.aborted) return;
 
         if (!dailyResponse.ok) {
           console.error(`Failed to fetch 1D bar for ${symbol}: HTTP ${dailyResponse.status}`);
@@ -582,6 +599,8 @@ export default function StockBubbles() {
         }
 
         const dailyData = await dailyResponse.json();
+        if (signal?.aborted) return;
+
         const dailyBars = dailyData.bars?.[symbol];
         if (!dailyBars || dailyBars.length === 0) {
           console.warn(`No 1D bars found for ${symbol}`);
@@ -592,14 +611,17 @@ export default function StockBubbles() {
         const lastDaysClose: number = dailyBars[0].c;
 
         // Step 3: Get most recent close from 1Min bars (1Min, desc)
-        // End time = current time minus 16 minutes, Start time = 1 day ago
-        const minuteUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Min&start=${start1DayStr}&end=${endStr}&limit=100&adjustment=all&feed=sip&sort=desc`;
+        // End time = current time minus 16 minutes, Start time = 4 days ago
+        const minuteUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Min&start=${start4DaysStr}&end=${endStr}&limit=100&adjustment=all&feed=sip&sort=desc`;
         const minuteResponse = await fetch(minuteUrl, {
           headers: {
             'APCA-API-KEY-ID': apiKey,
             'APCA-API-SECRET-KEY': secretKey,
           },
+          signal,
         });
+
+        if (signal?.aborted) return;
 
         if (!minuteResponse.ok) {
           console.error(`Failed to fetch 1Min bar for ${symbol}: HTTP ${minuteResponse.status}`);
@@ -607,6 +629,8 @@ export default function StockBubbles() {
         }
 
         const minuteData = await minuteResponse.json();
+        if (signal?.aborted) return;
+
         const minuteBars = minuteData.bars?.[symbol];
         if (!minuteBars || minuteBars.length === 0) {
           console.warn(`No 1Min bars found for ${symbol}`);
@@ -631,6 +655,8 @@ export default function StockBubbles() {
 
         // Step 6: Print to console the array liveStockPricesAndPercentages
         console.log('liveStockPricesAndPercentages:', liveStockPricesAndPercentagesArray);
+
+        if (signal?.aborted) return;
 
         // Steps 7, 8, 9:
         // Redraw the bubble for the stock being iterated:
@@ -663,7 +689,10 @@ export default function StockBubbles() {
           setError(null);
           setLoading(false);
         }
-      } catch (stockError) {
+      } catch (stockError: any) {
+        if (stockError?.name === 'AbortError' || signal?.aborted) {
+          return;
+        }
         console.error(`Error processing live data for ${symbol}:`, stockError);
       }
     }
@@ -672,7 +701,7 @@ export default function StockBubbles() {
     }
   }, []);
 
-  const runOneDayLogic = useCallback(async () => {
+  const runOneDayLogic = useCallback(async (signal?: AbortSignal) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     if (!apiKey || !secretKey) return;
@@ -690,6 +719,8 @@ export default function StockBubbles() {
     const end = now.toISOString();
 
     for (const symbol of SP500_SYMBOLS) {
+      if (signal?.aborted) return;
+
       try {
         const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1D&start=${start}&end=${end}&limit=30&adjustment=raw&feed=iex&sort=asc`;
         const response = await fetch(url, {
@@ -697,11 +728,15 @@ export default function StockBubbles() {
             'APCA-API-KEY-ID': apiKey,
             'APCA-API-SECRET-KEY': secretKey,
           },
+          signal,
         });
 
+        if (signal?.aborted) return;
         if (!response.ok) continue;
 
         const data = await response.json();
+        if (signal?.aborted) return;
+
         const bars = data.bars?.[symbol];
 
         if (bars && bars.length >= 2) {
@@ -716,6 +751,8 @@ export default function StockBubbles() {
           });
 
           console.log('oneDayStockPricesAndPercentages:', oneDayStockPricesAndPercentages);
+
+          if (signal?.aborted) return;
 
           setStocks((prev) => {
             const updatedStockItem: Stock = {
@@ -739,13 +776,16 @@ export default function StockBubbles() {
           // Increment counter of redrawn stock bubbles, stopping when total stocks reached
           setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          return;
+        }
         console.error(`Error in 1D logic for ${symbol}:`, err);
       }
     }
   }, []);
 
-  const runATHLogic = useCallback(async () => {
+  const runATHLogic = useCallback(async (signal?: AbortSignal) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     if (!apiKey || !secretKey) return;
@@ -763,6 +803,8 @@ export default function StockBubbles() {
     const end = now.toISOString();
 
     for (const symbol of SP500_SYMBOLS) {
+      if (signal?.aborted) return;
+
       try {
         const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1M&start=${start}&end=${end}&limit=100&adjustment=split&feed=iex&sort=asc`;
         const response = await fetch(url, {
@@ -770,11 +812,15 @@ export default function StockBubbles() {
             'APCA-API-KEY-ID': apiKey,
             'APCA-API-SECRET-KEY': secretKey,
           },
+          signal,
         });
 
+        if (signal?.aborted) return;
         if (!response.ok) continue;
 
         const data = await response.json();
+        if (signal?.aborted) return;
+
         const bars = data.bars?.[symbol];
 
         if (bars && bars.length > 0) {
@@ -789,6 +835,8 @@ export default function StockBubbles() {
           });
 
           console.log('athStockPricesAndPercentages:', athStockPricesAndPercentages);
+
+          if (signal?.aborted) return;
 
           setStocks((prev) => {
             const updatedStockItem: Stock = {
@@ -812,13 +860,16 @@ export default function StockBubbles() {
           // Increment counter of redrawn stock bubbles, stopping when total stocks reached
           setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          return;
+        }
         console.error(`Error in ATH logic for ${symbol}:`, err);
       }
     }
   }, []);
 
-  const runOneHourLogic = useCallback(async () => {
+  const runOneHourLogic = useCallback(async (signal?: AbortSignal) => {
     const apiKey = process.env.NEXT_PUBLIC_ALPACA_API_KEY;
     const secretKey = process.env.NEXT_PUBLIC_ALPACA_SECRET_KEY;
     if (!apiKey || !secretKey) return;
@@ -836,6 +887,8 @@ export default function StockBubbles() {
     const end = now.toISOString();
 
     for (const symbol of SP500_SYMBOLS) {
+      if (signal?.aborted) return;
+
       try {
         const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1H&start=${start}&end=${end}&limit=100&adjustment=raw&feed=iex&sort=asc`;
         const response = await fetch(url, {
@@ -843,11 +896,15 @@ export default function StockBubbles() {
             'APCA-API-KEY-ID': apiKey,
             'APCA-API-SECRET-KEY': secretKey,
           },
+          signal,
         });
 
+        if (signal?.aborted) return;
         if (!response.ok) continue;
 
         const data = await response.json();
+        if (signal?.aborted) return;
+
         const bars = data.bars?.[symbol];
 
         if (bars && bars.length >= 2) {
@@ -862,6 +919,8 @@ export default function StockBubbles() {
           });
 
           console.log('oneHourStockPricesAndPercentages:', oneHourStockPricesAndPercentages);
+
+          if (signal?.aborted) return;
 
           setStocks((prev) => {
             const updatedStockItem: Stock = {
@@ -885,7 +944,10 @@ export default function StockBubbles() {
           // Increment counter of redrawn stock bubbles, stopping when total stocks reached
           setRedrawnStockCount((prev) => (prev < SP500_SYMBOLS.length ? prev + 1 : SP500_SYMBOLS.length));
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          return;
+        }
         console.error(`Error in 1H logic for ${symbol}:`, err);
       }
     }
@@ -897,60 +959,55 @@ export default function StockBubbles() {
     setProgress(0); // Reset polling progress bar immediately
     setRedrawnStockCount(0); // Reset redrawn bubble counter every time a new timeframe is selected
 
-    // Clear all stock bubbles from the canvas before starting redraw for the selected timeframe
+    // 1. Cancel and abort all existing and pending API calls from prior timeframe
+    if (timeframeAbortControllerRef.current) {
+      timeframeAbortControllerRef.current.abort();
+    }
+    const newController = new AbortController();
+    timeframeAbortControllerRef.current = newController;
+    const signal = newController.signal;
+
+    // 2. Clear the canvas of bubbles no matter which timeframe was selected
     setStocks([]);
 
     if (timeframe === 'Live') {
       // Mark canvas as cleared so the subsequent live iteration populates bubbles cleanly
       hasClearedCanvasForLiveRef.current = true;
       // Trigger live stock prices and percentages calculation
-      liveStockPricesAndPercentages();
+      liveStockPricesAndPercentages(false, signal);
     } else if (timeframe === '1D') {
-      runOneDayLogic();
+      runOneDayLogic(signal);
     } else if (timeframe === '1H') {
-      runOneHourLogic();
+      runOneHourLogic(signal);
     } else if (timeframe === 'ATH') {
-      runATHLogic();
+      runATHLogic(signal);
+    } else {
+      fetchStockData(false, signal);
     }
-  }, [liveStockPricesAndPercentages, runOneDayLogic, runOneHourLogic, runATHLogic]);
+  }, [liveStockPricesAndPercentages, runOneDayLogic, runOneHourLogic, runATHLogic, fetchStockData]);
 
   // Handle initial data load on component mount via Alpaca REST API
-  // On initial load, 'Live' timeframe is selected by default and liveStockPricesAndPercentages runs.
+  // On initial load, 'Live' timeframe is selected by default: cancels any pending calls, clears canvas, then runs.
   useEffect(() => {
-    setRedrawnStockCount(0); // Reset redrawn stock counter on initial load
-    liveStockPricesAndPercentages(true);
-  }, [liveStockPricesAndPercentages]);
+    // 1. Cancel any existing controller and instantiate a fresh AbortController for initial load
+    if (timeframeAbortControllerRef.current) {
+      timeframeAbortControllerRef.current.abort();
+    }
+    const initialController = new AbortController();
+    timeframeAbortControllerRef.current = initialController;
+    const signal = initialController.signal;
 
-  // Handle polling updates and progress bar, resets whenever activeTimeframe changes
-  useEffect(() => {
-    setProgress(0); // Trigger immediate refresh on timeframe change
+    // 2. Clear canvas bubbles and reset counter before initial load calculations
+    setStocks([]);
+    setRedrawnStockCount(0);
 
-    const pollInterval = setInterval(() => {
-      setProgress(0);
-      if (activeTimeframe === '1H') {
-        runOneHourLogic();
-      } else if (activeTimeframe === '1D') {
-        runOneDayLogic();
-      } else if (activeTimeframe === 'ATH') {
-        runATHLogic();
-      } else if (activeTimeframe === 'Live') {
-        // Run live stock prices and percentages on recurring poll
-        liveStockPricesAndPercentages();
-      } else {
-        // Other timeframes poll latest market snapshot data
-        fetchStockData(false);
-      }
-    }, 15000);
-
-    const progressTimer = setInterval(() => {
-      setProgress(prev => (prev < 100 ? prev + (100 / 1500) : 0));
-    }, 10);
+    liveStockPricesAndPercentages(true, signal);
 
     return () => {
-      clearInterval(pollInterval);
-      clearInterval(progressTimer);
+      // Cleanup: Abort any running requests on unmount
+      initialController.abort();
     };
-  }, [activeTimeframe, runOneHourLogic, runOneDayLogic, runATHLogic, liveStockPricesAndPercentages, fetchStockData]);
+  }, [liveStockPricesAndPercentages]);
 
   // Fetch historical candle data when a stock is selected
   useEffect(() => {

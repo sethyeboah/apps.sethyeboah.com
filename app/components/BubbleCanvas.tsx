@@ -45,11 +45,19 @@ export default function BubbleCanvas({ stocks, onStockSelect, searchTerm = '', d
   }, [displayMode]);
 
   useEffect(() => {
-    if (!canvasRef.current || stocks.length === 0) return;
+    if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // When there are no stocks (e.g. timeframe change or initial clear), clear the canvas immediately
+    if (stocks.length === 0) {
+      bubblesRef.current = [];
+      const dpr = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      return;
+    }
 
     let logicalWidth = 0;
     let logicalHeight = 0;
