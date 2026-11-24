@@ -540,8 +540,12 @@ export default function StockBubbles() {
    *  3. Runs an endless while loop that breaks only when active timeframe changes or abort signal is received.
    *  4. Inside, runs a 60-second iteration loop (breaks after 60s or when timeframe changes).
    *  5. Iterates through the stock list (retrying failed tickers first, then the rest):
-   *     a. Fetches 1D bar close (start: 30 days ago, end: now - 16 min, limit 30, adjustment all, feed sip, desc) -> lastDaysClose.
-   *     b. Fetches 1Min bar close (start: 5 days ago, end: now - 16 min, limit 100, adjustment all, feed sip, desc) -> currentPrice.
+   *     a. Fetches 1D bars (most recent and previous) to determine lastDaysClose based on market hours:
+   *        - During market hours (9:30AM - 4:00PM EST): use previous 1D close as lastDaysClose
+   *        - Outside market hours: use most recent 1D close as lastDaysClose
+   *     b. Fetches 1Min bar close for currentPrice with feed based on time:
+   *        - Overnight (8:00PM - 4:00AM EST): feed=boats, limit=1000
+   *        - Day (4:00AM - 8:00PM EST): feed=sip, limit=100
    *     c. On error: records ticker in failedAPICallTickers array, logs to console, and moves to next stock.
    *     d. Computes percentage change: ((currentPrice - lastDaysClose) / lastDaysClose) * 100 -> percentageChangeFromLastToCurrent.
    *     e. Stores { symbol, lastDaysClose, percentageChangeFromLastToCurrent } in liveStockPricesAndPercentages array.
@@ -552,7 +556,9 @@ export default function StockBubbles() {
    *     j. Displays percentageChangeFromLastToCurrent as bubble percentage.
    *     k. Updates the lastUpdated timestamp for this stock in the stock modal.
    *     l. Repeats until all stocks in current pass are processed.
-   *  6. In subsequent 60-second sequences, retries failed tickers first before other stocks.
+   *  6. In subsequent 60-second sequences:
+   *     FIRST: Retry all tickers in failedAPICallTickers array (re-run full step 5: API calls, calculations, redraws)
+   *     THEN:  Process all remaining stocks to pull fresh data and update existing bubbles (re-run full step 5)
    *  7. Updates the timestamp in the Last Update Time Indicator Box.
    */
   const liveStockPricesAndPercentages = useCallback(async (isInitial = false, signal?: AbortSignal) => {
@@ -585,6 +591,34 @@ export default function StockBubbles() {
         }, { once: true });
       });
 
+    /**
+     * Helper: Check if current time (in EST) is within regular market hours (9:30 AM - 4:00 PM EST)
+     * @returns true if current EST time is between 9:30 AM and 4:00 PM
+     */
+    const isMarketHours = (): boolean => {
+      const now = new Date();
+      // Convert to EST (UTC-5 or UTC-4 during DST)
+      // Using toLocaleString with timeZone to get EST time components
+      const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const hours = estTime.getHours();
+      const minutes = estTime.getMinutes();
+      const totalMinutes = hours * 60 + minutes;
+      // Market hours: 9:30 AM (570 minutes) to 4:00 PM (960 minutes)
+      return totalMinutes >= 570 && totalMinutes < 960;
+    };
+
+    /**
+     * Helper: Check if current time (in EST) is within overnight hours (8:00 PM - 4:00 AM EST)
+     * @returns true if current EST time is between 8:00 PM and 4:00 AM
+     */
+    const isOvernightHours = (): boolean => {
+      const now = new Date();
+      const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const hours = estTime.getHours();
+      // Overnight: 8:00 PM (20) to 4:00 AM (4)
+      return hours >= 20 || hours < 4;
+    };
+
     // Array to record tickers whose API calls fail, for retrying in the subsequent 60-second sequence
     let failedAPICallTickers: string[] = [];
 
@@ -593,18 +627,27 @@ export default function StockBubbles() {
       const loopStartTime = Date.now();
       const SIXTY_SECONDS_MS = 60 * 1000;
 
-      // Step 6: Determine execution queue for this 60-second sequence:
-      // First retry any failed tickers from previous pass, followed by remaining tickers
+      // ============================================================
+      // Step 6: In the next 60-second sequence:
+      //   FIRST: Retry all tickers in failedAPICallTickers array
+      //          (re-run full step 5: API calls, calculations, redraws)
+      //   THEN:  Process all remaining stocks to pull fresh data
+      //          and update existing bubbles (re-run full step 5)
+      // ============================================================
       let symbolsToProcess: string[];
       if (failedAPICallTickers.length > 0) {
         const failedSet = new Set(failedAPICallTickers);
         const remainingSymbols = SP500_SYMBOLS.filter((s) => !failedSet.has(s));
+        // Priority 1: Failed tickers from previous sequence (retry with full step 5 logic)
+        // Priority 2: All other stocks (pull new data and update bubbles with full step 5 logic)
         symbolsToProcess = [...failedAPICallTickers, ...remainingSymbols];
       } else {
+        // First sequence or no failures: process all stocks with full step 5 logic
         symbolsToProcess = [...SP500_SYMBOLS];
       }
 
       // Reset failed tickers list for the new sequence pass
+      // (will be repopulated during this sequence if any API calls fail)
       failedAPICallTickers = [];
 
       // Array holding stock prices and percentage changes for logging
@@ -615,6 +658,7 @@ export default function StockBubbles() {
       }> = [];
 
       // Step 4: Inner loop that breaks after 60 seconds or if a new timeframe is selected
+      // This loop executes the FULL step 5 logic for each symbol in priority order
       for (const symbol of symbolsToProcess) {
         // Break out immediately if new timeframe selected or aborted
         if (signal?.aborted || activeTimeframeRef.current !== 'Live') {
@@ -629,7 +673,7 @@ export default function StockBubbles() {
 
         try {
           // Dynamic timestamps for API queries:
-          // End time: current time minus 16 minutes
+          // End time: current time minus 16 minutes (to avoid delayed data)
           const now = new Date();
           const endTime = new Date(now.getTime() - 16 * 60 * 1000);
           const endStr = endTime.toISOString();
@@ -642,7 +686,10 @@ export default function StockBubbles() {
           const fiveDaysAgo = new Date(endTime.getTime() - 5 * 24 * 60 * 60 * 1000);
           const start5DaysStr = fiveDaysAgo.toISOString();
 
-          // Step 5a: Get most recent one day close (1D bar, desc)
+          // ------------------------------------------------------------
+          // Step 5a: Get most recent AND previous one day close (1D bars)
+          // We need 2 bars: index 0 = most recent, index 1 = previous
+          // ------------------------------------------------------------
           const dailyUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1D&start=${start30DaysStr}&end=${endStr}&limit=30&adjustment=all&feed=sip&sort=desc`;
           const dailyResponse = await fetch(dailyUrl, {
             headers: {
@@ -662,15 +709,32 @@ export default function StockBubbles() {
           if (signal?.aborted || activeTimeframeRef.current !== 'Live') break;
 
           const dailyBars = dailyData.bars?.[symbol];
-          if (!dailyBars || dailyBars.length === 0) {
-            throw new Error(`No 1D bars found for ${symbol}`);
+          if (!dailyBars || dailyBars.length < 2) {
+            throw new Error(`Need at least 2 daily bars for ${symbol}, got ${dailyBars?.length ?? 0}`);
           }
 
-          // With sort=desc, index 0 is the most recent daily bar
-          const lastDaysClose: number = dailyBars[0].c;
+          // With sort=desc:
+          // index 0 = most recent daily bar (today's close if market closed, or latest available)
+          // index 1 = previous daily bar (yesterday's close)
+          const mostRecentDailyClose: number = dailyBars[0].c;
+          const previousDailyClose: number = dailyBars[1].c;
 
-          // Step 5b: Get most recent close from 1Min bars (1Min, desc, 5 days ago start)
-          const minuteUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Min&start=${start5DaysStr}&end=${endStr}&limit=100&adjustment=all&feed=sip&sort=desc`;
+          // Determine lastDaysClose based on market hours:
+          // - During market hours (9:30AM - 4:00PM EST): use previous day's close
+          // - Outside market hours: use most recent day's close
+          const lastDaysClose: number = isMarketHours() ? previousDailyClose : mostRecentDailyClose;
+
+          // ------------------------------------------------------------
+          // Step 5b/5c: Get most recent close from 1Min bars
+          // Feed and limit depend on time of day:
+          // - Overnight (8:00PM - 4:00AM EST): feed=boats, limit=1000
+          // - Day (4:00AM - 8:00PM EST): feed=sip, limit=100
+          // ------------------------------------------------------------
+          const isOvernight = isOvernightHours();
+          const minuteFeed = isOvernight ? 'boats' : 'sip';
+          const minuteLimit = isOvernight ? 1000 : 100;
+
+          const minuteUrl = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Min&start=${start5DaysStr}&end=${endStr}&limit=${minuteLimit}&adjustment=all&feed=${minuteFeed}&sort=desc`;
           const minuteResponse = await fetch(minuteUrl, {
             headers: {
               'APCA-API-KEY-ID': apiKey,
